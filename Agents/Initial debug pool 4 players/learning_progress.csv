@@ -1,0 +1,8 @@
+Average reward self play,Average reward previous iterations,Average evaluation reward,Fraction of unique states,Experience buffer size,Mean loss,Average self play episode length,Data agent path
+0.5133333333333333,-1,0.6399999999999999,1.0,73235,3.0203809240653832e-05,161.26,/home/tom/Kaggle/Halite/Logic/../Agents/Initial debug pool 4 players/iteration_1.h5
+0.4866666666666667,-1,0.6200000000000001,1.0,141224,1.4473362424083148e-05,171.275,/home/tom/Kaggle/Halite/Logic/../Agents/Initial debug pool 4 players/iteration_1.h5
+0.56,-1,0.5533333333333332,1.0,212267,1.3282383503520782e-05,177.725,/home/tom/Kaggle/Halite/Logic/../Agents/Initial debug pool 4 players/iteration_1.h5
+0.5466666666666666,-1,0.5533333333333335,1.0,282281,1.2209423242023449e-05,170.605,/home/tom/Kaggle/Halite/Logic/../Agents/Initial debug pool 4 players/iteration_1.h5
+0.6466666666666667,-1,0.5633333333333332,1.0,351222,1.1593584418944713e-05,176.49,/home/tom/Kaggle/Halite/Logic/../Agents/Initial debug pool 4 players/iteration_1.h5
+0.6266666666666666,-1,0.6066666666666667,1.0,352691,1.0982499015232747e-05,192.92,/home/tom/Kaggle/Halite/Logic/../Agents/Initial debug pool 4 players/iteration_1.h5
+0.4466666666666667,-1,0.4,1.0,83136,,188.78,/home/tom/Kaggle/Halite/Logic/../Agents/Initial debug pool 4 players/iteration_2.h5
