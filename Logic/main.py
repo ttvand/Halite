@@ -10,7 +10,7 @@ config = {
   'num_games': 50,
   'num_games_previous_iterations': 0,
   'num_evaluation_games': 50,
-  'max_experience_buffer': 500,
+  'max_experience_buffer': 400,
   'min_new_iteration_win_rate': 0.6,
   'record_videos_new_iteration': True,
   
@@ -26,7 +26,7 @@ config = {
     # 'unet_start_neurons': 16,
     # 'unet_dropout_ratio': 0.2,
     
-    'pool_name': 'Initial debug pool 4 players',
+    'pool_name': 'Pool 4 players - Go nearest base action',
     'model': models.convnet_simple,
     'filters_kernels': [
       (64, 3), (32, 3), (32, 3), (32, 3), (32, 3)],
@@ -43,7 +43,7 @@ config = {
     'num_epochs': 1,
     'nan_coding_value': -999,
     'symmetric_experience': True,
-    'max_episodes_per_learning_update_q_learning': 250,
+    'max_episodes_per_learning_update_q_learning': 200,
     },
   
   'play_previous_pools': False,

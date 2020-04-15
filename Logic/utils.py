@@ -8,6 +8,7 @@ import os
 import pandas as pd
 from pathlib import Path
 import pickle
+import tempfile
 from tensorflow.keras import backend as K
 from tensorflow.keras.models import load_model
 import tensorflow as tf
@@ -18,6 +19,7 @@ import tensorflow as tf
 # Acting utilities                                                            #
 ###############################################################################
 
+GO_NEAREST_BASE = "GO_NEAREST_BASE"
 ACTION_MAPPING = {
   0: "NORTH",
   1: "SOUTH",
@@ -26,6 +28,7 @@ ACTION_MAPPING = {
   4: "CONVERT",
   5: "SPAWN",
   6: None,
+  7: GO_NEAREST_BASE
   }
 
 def get_input_output_shapes(config):
@@ -180,8 +183,10 @@ def get_key_q_valid(q_values, player_obs, configuration, rewards_bases_ships):
   
   key_q_valid = []
   
-  base_valid = np.ones((7), dtype=np.bool)
+  num_actions = len(ACTION_MAPPING)
+  base_valid = np.ones((num_actions), dtype=np.bool)
   base_valid[:5] = 0
+  base_valid[7] = 0
   for k in shipyard_keys:
     row, col = row_col_from_square_grid_pos(player_obs[1][k], grid_size)
     
@@ -189,8 +194,9 @@ def get_key_q_valid(q_values, player_obs, configuration, rewards_bases_ships):
     base_valid[5] = not rewards_bases_ships[0][2][row][col]
     key_q_valid.append((k, q_values[row, col], base_valid, row, col))
   
-  ship_valid = np.ones((7), dtype=np.bool)
+  ship_valid = np.ones((8), dtype=np.bool)
   ship_valid[5] = 0
+  ship_valid[7] = bool(shipyard_keys)
   for k in ship_keys:
     row, col = row_col_from_square_grid_pos(player_obs[2][k][0], grid_size)
     
@@ -201,6 +207,53 @@ def get_key_q_valid(q_values, player_obs, configuration, rewards_bases_ships):
     key_q_valid.append((k, q_values[row, col], ship_valid, row, col))
     
   return key_q_valid
+
+def get_direction_nearest_base(observation, row, col, grid_size):
+  num_bases = len(observation[1])
+  horiz_distances = np.zeros((num_bases))
+  vert_distances = np.zeros((num_bases))
+  base_distances = np.zeros((num_bases))
+  base_keys = list(observation[1].keys())
+  for i, k in enumerate(base_keys):
+    base_row, base_col = row_col_from_square_grid_pos(
+      observation[1][k], grid_size)
+    if base_row == row and base_col == col:
+      return None
+    
+    horiz_diff = base_col-col
+    horiz_dist = min(np.abs(horiz_diff),
+      min(np.abs(horiz_diff-grid_size), np.abs(horiz_diff+grid_size)))
+    vert_diff = base_row-row
+    vert_dist = min(np.abs(vert_diff),
+      min(np.abs(vert_diff-grid_size), np.abs(vert_diff+grid_size)))
+    horiz_distances[i] = horiz_dist
+    vert_distances[i] = vert_dist
+    base_distances[i] = horiz_dist + vert_dist
+    
+  shortest_distance = base_distances.min()
+  shortest_ids = np.where(base_distances == shortest_distance)[0]
+  half_grid = grid_size / 2
+  shortest_directions = []
+  for i in shortest_ids:
+    base_row, base_col = row_col_from_square_grid_pos(
+      observation[1][k], grid_size)
+    if horiz_distances[i] > 0:
+      if base_col > col:
+        shortest_dir = "EAST" if (base_col - col) <= half_grid else "WEST"
+      else:
+        shortest_dir = "WEST" if (col - base_col) <= half_grid else "EAST"
+      shortest_directions.append(shortest_dir)
+    if vert_distances[i] > 0:
+      if base_row > row:
+        shortest_dir = "SOUTH" if (base_row - row) <= half_grid else "NORTH"
+      else:
+        shortest_dir = "NORTH" if (row - base_row) <= half_grid else "SOUTH"
+      shortest_directions.append(shortest_dir)
+      
+  # Intentional: Do not only consider unique directions (
+  # empowerment! Prefer the hill top to keep options open)
+  return np.random.choice(shortest_directions)
+  
 
 # Q value based main function to act a single step
 def get_agent_q_and_a(network, observation, player_obs, configuration,
@@ -233,6 +286,8 @@ def get_agent_q_and_a(network, observation, player_obs, configuration,
     actions[r, c] = action_id
     action_budget -= action_costs[action_id]
     mapped_action = ACTION_MAPPING[action_id]
+    if mapped_action == GO_NEAREST_BASE:
+      mapped_action = get_direction_nearest_base(player_obs, r, c, grid_size)
     if mapped_action is not None:
       all_mapped_actions[k] = mapped_action
       
@@ -278,11 +333,7 @@ def aggregate_next_mixed_q_vals(
   # appropriately
   offsets = episode_offsets+episode_steps*num_agents+agent_ids
   mean_best_valid_qs_filled = np.zeros((episode_durations.sum()*num_agents))
-  try:
-    mean_best_valid_qs_filled[offsets] = mean_best_valid_qs
-  except:
-    import pdb; pdb.set_trace()
-    x=1
+  mean_best_valid_qs_filled[offsets] = mean_best_valid_qs
   
   # Obtain the next q-values for all agents
   mean_best_valid_qs = mean_best_valid_qs_filled.reshape(
@@ -366,6 +417,27 @@ def make_masked_mse(nan_coding_value):
 ###############################################################################
 # Data utilities                                                              #
 ###############################################################################
+
+def make_keras_picklable():
+  def __getstate__(self):
+    model_str = ""
+    with tempfile.NamedTemporaryFile(suffix='.h5', delete=False) as fd:
+      tf.keras.models.save_model(self, fd.name, overwrite=True)
+      model_str = fd.read()
+    d = {'model_str': model_str }
+    return d
+
+  def __setstate__(self, state):
+    with tempfile.NamedTemporaryFile(suffix='.h5', delete=False) as fd:
+      fd.write(state['model_str'])
+      fd.flush()
+      model = tf.keras.models.load_model(fd.name)
+    self.__dict__ = model.__dict__
+
+
+  cls = tf.keras.models.Model
+  cls.__getstate__ = __getstate__
+  cls.__setstate__ = __setstate__
 
 # Increment the iteration id of some .h5 model path
 def increment_iteration_id(path):
@@ -545,6 +617,9 @@ def record_videos(agent_path, num_agents_per_game):
       
       action_budget -= action_costs[action_id]
       mapped_action = ACTION_MAPPING[action_id]
+      if mapped_action == GO_NEAREST_BASE:
+        mapped_action = get_direction_nearest_base(
+          player_obs, r, c, env_configuration.size)
       if mapped_action is not None:
         mapped_actions[k] = mapped_action
        
@@ -584,6 +659,4 @@ def deserialize(serialized):
   value = pickle.loads(data_byte)
   return value
     
-    
-    
-    
+# make_keras_picklable()

@@ -280,19 +280,25 @@ def play_games(pool_name, num_games, max_pool_size, agent_config,
     record_videos_new_iteration)
   num_opponent_agents = len(other_agents)
   
+  
   # Generate experience for a fixed number of games, alternating start turns
   experience = []
   reward_sum = 0
   opponent_id_rewards = [(0, 0) for _ in range(num_opponent_agents)]
   num_agents = agent_config['num_agents_per_game']
   if use_multiprocessing:
+    # Verify keras models are picklable - see utils.make_keras_picklable
+    # import pickle
+    # pickle.dumps(this_agent)
+    
+    # BUGGY FOR NOW - FIX ME (?). Likely issue: multiprocessing and keras (GPU)
+    # causing a deadlock
     pool = mp.Pool(processes=mp.cpu_count()-1)
     results = [pool.apply_async(
                 collect_experience_single_game, args=(
                   this_agent, other_agents, num_agents, agent_config,
                   action_costs, verbose, g,)) for g in np.arange(num_games)]
     game_outputs = [p.get() for p in results]
-    import pdb; pdb.set_trace()
   else:
     game_outputs = []
     for game_id in range(num_games):
