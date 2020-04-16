@@ -1,4 +1,5 @@
 import collect_experience
+from datetime import datetime
 import learn_from_experience
 import models
 import numpy as np
@@ -26,7 +27,7 @@ config = {
     # 'unet_start_neurons': 16,
     # 'unet_dropout_ratio': 0.2,
     
-    'pool_name': 'Pool 4 players - Go nearest base action',
+    'pool_name': 'Pool 4 players - Halite change as reward',
     'model': models.convnet_simple,
     'filters_kernels': [
       (64, 3), (32, 3), (32, 3), (32, 3), (32, 3)],
@@ -35,6 +36,7 @@ config = {
     'augment_input_version': (True, 'v1'),
     'epsilon_greedy': False,
     'epsilon_range': [0.01, 0.3], # Min, max range
+    'num_q_functions': 1,
     },
   
   'learning_config': {
@@ -43,6 +45,8 @@ config = {
     'num_epochs': 1,
     'nan_coding_value': -999,
     'symmetric_experience': True,
+    'reward_type': ['Terminal', 'Halite change'][1],
+    'halite_change_discount': 0.99,
     'max_episodes_per_learning_update_q_learning': 200,
     },
   
@@ -152,6 +156,7 @@ while True:
     'Mean loss': mean_loss,
     'Average self play episode length': av_self_play_episode_length,
     'Data agent path': data_agent_path,
+    'Time stamp': str(datetime.now()),
     })
   
   

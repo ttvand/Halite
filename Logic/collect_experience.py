@@ -17,10 +17,12 @@ ExperienceStep = recordtype('ExperienceStep', [
   'mapped_actions',
   'valid_actions',
   'network_outputs',
-  'next_obs',
+  # 'next_obs',
   'this_agent_action',
   'active_id',
   'episode_step',
+  'next_halite',
+  'halite_change',
   'num_episode_steps',
   'last_episode_action',
   'episode_reward',
@@ -178,6 +180,7 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
   # Take actions until the game is terminated
   while not env.done:
     env_observation = env.state[0].observation
+    player_current_observations = []
     player_current_obs = []
     player_network_outputs = []
     player_actions = []
@@ -199,6 +202,7 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
         if verbose:
           print("Player {} obs: {}".format(active_id, player_obs))
           print("Actions: {}\n".format(mapped_actions))
+        player_current_observations.append(current_observation)
         player_current_obs.append(current_obs[0][0])
         player_network_outputs.append(network_outputs)
         player_actions.append(actions)
@@ -219,10 +223,16 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
 
     # Store the state transition data
     for i, active_id in enumerate(store_transition_ids):
-      next_observation = utils.structured_env_obs(
-        env.configuration, env_observation, active_id)
-      next_obs = utils.state_to_input(next_observation)
+      # next_observation = utils.structured_env_obs(
+      #   env.configuration, env_observation, active_id)
+      # next_halite = next_observation['rewards_bases_ships'][0][0]
+      # next_obs = utils.state_to_input(next_observation)
       agent_status = env.state[active_id].status
+      next_halite = env.state[0].observation.players[active_id][0]
+      
+      if next_halite-halite_scores[episode_step, active_id] < -5000:
+        import pdb; pdb.set_trace()
+      
       this_game_data.append(ExperienceStep(
         game_id,
         player_current_obs[i],
@@ -230,10 +240,12 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
         player_mapped_actions[active_id],
         player_valid_actions[i],
         player_network_outputs[i],
-        next_obs,
+        # next_obs, # Dropped out of memory concerns - useful for debugging
         active_id == this_agent_position, # This agent move?
         active_id,
         episode_step,
+        next_halite,
+        next_halite-halite_scores[episode_step, active_id],
         np.nan, # Number of episode steps, overwritten at the end of episode
         agent_status == 'INVALID', # Last episode action
         np.nan, # Reward, overwritten at the end of the episode
@@ -254,9 +266,8 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
   # Update statistics which can not be computed before the episode is over.
   for i in range(len(store_transition_ids)):
     this_game_data[-1-i].last_episode_action = True # Last episode action
-  num_episode_steps = len(this_game_data)//num_agents
   for i in range(len(this_game_data)):
-    this_game_data[i].num_episode_steps = num_episode_steps
+    this_game_data[i].num_episode_steps = episode_step
     
   episode_duration = time.time() - episode_start_time
     

@@ -26,10 +26,11 @@ def update_agent(experience, episode_ids, agent_path, config, agent_config):
     subset_experience = [e for (e, m) in zip(experience, subset_mask) if m]
     subset_experience_episode_ids = episode_ids[subset_mask]
     
-    x_train, y_train = utils.mixed_nega_q_learning(
+    x_train, y_train = utils.q_learning(
       model, subset_experience, subset_experience_episode_ids,
       nan_coding_value, config['symmetric_experience'],
-      agent_config['num_agents_per_game'])
+      agent_config['num_agents_per_game'], config['reward_type'],
+      config['halite_change_discount'])
     
     history = model.fit(
       x_train,

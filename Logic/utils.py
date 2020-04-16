@@ -28,8 +28,9 @@ ACTION_MAPPING = {
   4: "CONVERT",
   5: "SPAWN",
   6: None,
-  7: GO_NEAREST_BASE
+  7: GO_NEAREST_BASE,
   }
+INVERSE_ACTION_MAPPING= {v: k for k, v in ACTION_MAPPING.items()}
 
 def get_input_output_shapes(config):
   # Create a new environment, perform the preprocessing and record the shape
@@ -41,7 +42,7 @@ def get_input_output_shapes(config):
     env_configuration, env_observation, active_id=0))
   num_actions = len(ACTION_MAPPING)
   
-  return obs_input.shape, num_actions
+  return obs_input.shape, num_actions, config['num_q_functions']
 
 def get_action_costs():
   # Create a new environment, read the config and record the action costs
@@ -180,30 +181,36 @@ def get_key_q_valid(q_values, player_obs, configuration, rewards_bases_ships):
   shipyard_keys = list(player_obs[1].keys())
   ship_keys = list(player_obs[2].keys())
   grid_size = configuration.size
+  any_bases = np.stack([o[1] for o in rewards_bases_ships]).sum(0)
   
   key_q_valid = []
   
   num_actions = len(ACTION_MAPPING)
-  base_valid = np.ones((num_actions), dtype=np.bool)
-  base_valid[:5] = 0
-  base_valid[7] = 0
   for k in shipyard_keys:
+    # Declaration of base_valid in the loop to avoid overwriting with define
+    # by reference (otherwise this breaks!)
+    base_valid = np.ones((num_actions), dtype=np.bool)
+    base_valid[:5] = 0
+    base_valid[7] = 0
     row, col = row_col_from_square_grid_pos(player_obs[1][k], grid_size)
     
     # No spawning when my agent currently has a ship at the base (clear waste)
-    base_valid[5] = not rewards_bases_ships[0][2][row][col]
+    base_valid[5] = not rewards_bases_ships[0][2][row, col]
     key_q_valid.append((k, q_values[row, col], base_valid, row, col))
   
-  ship_valid = np.ones((8), dtype=np.bool)
-  ship_valid[5] = 0
-  ship_valid[7] = bool(shipyard_keys)
   for k in ship_keys:
+    # Declaration of ship_valid in the loop to avoid overwriting with define
+    # by reference (otherwise this breaks!)
+    ship_valid = np.ones((8), dtype=np.bool)
+    ship_valid[5] = 0
+    ship_valid[7] = bool(shipyard_keys)
     row, col = row_col_from_square_grid_pos(player_obs[2][k][0], grid_size)
     
     # No converting at the location of my or opponent bases
-    ship_valid[4] = True
-    for i in range(len(rewards_bases_ships)):
-      ship_valid[4] = ship_valid[4] and not rewards_bases_ships[i][1][row][col]
+    ship_valid[4] = not any_bases[row, col]
+    # import pdb; pdb.set_trace()
+    # for i in range(len(rewards_bases_ships)):
+    #   ship_valid[4] = ship_valid[4] and not rewards_bases_ships[i][1][row, col]
     key_q_valid.append((k, q_values[row, col], ship_valid, row, col))
     
   return key_q_valid
@@ -272,9 +279,10 @@ def get_agent_q_and_a(network, observation, player_obs, configuration,
   all_mapped_actions = {}
   grid_size = configuration.size
   num_actions = len(ACTION_MAPPING)
-  actions = -1*np.ones((grid_size, grid_size)).astype(np.int32)
+  actions = -1*np.ones((grid_size, grid_size, 2)).astype(np.int32)
   valid_actions = np.zeros((grid_size, grid_size, num_actions), dtype=np.bool)
   action_budget = player_obs[0]
+  
   for i, (k, q_sub_values, valid_sub_actions, r, c) in enumerate(
       all_key_q_valid):
     # Set actions we can't afford to invalid
@@ -283,11 +291,13 @@ def get_agent_q_and_a(network, observation, player_obs, configuration,
                                      epsilon_greedy, exploration_parameter,
                                      pick_first_on_tie)
     valid_actions[r, c] = valid_sub_actions
-    actions[r, c] = action_id
+    actions[r, c, 0] = action_id
     action_budget -= action_costs[action_id]
     mapped_action = ACTION_MAPPING[action_id]
     if mapped_action == GO_NEAREST_BASE:
       mapped_action = get_direction_nearest_base(player_obs, r, c, grid_size)
+      actions[r, c, 0] = INVERSE_ACTION_MAPPING[mapped_action]
+      actions[r, c, 1] = action_id
     if mapped_action is not None:
       all_mapped_actions[k] = mapped_action
       
@@ -309,8 +319,30 @@ def one_step_mixed_q_targets(next_mixed_q_vals, experience):
   
   return target_qs
 
-def aggregate_next_mixed_q_vals(
-    experience, episode_ids, this_q_vals, num_agents):
+def halite_change_target_qs(experience, episode_ids, this_q_vals,
+                            discount_factor, num_agents,
+                            halite_base=0.5, halite_normalizer=1e4):
+  # Filter out next Q-values where the action is not valid. Filtered out since
+  # every target computation performs a max operation.
+  mean_best_valid_qs_filled, offsets = get_mean_best_valid_qs_filled(
+    experience, this_q_vals, episode_ids, num_agents)
+  
+  # Obtain the next q-values for all agents
+  next_q_vals = np.concatenate([mean_best_valid_qs_filled[num_agents:],
+                                np.full((num_agents), -999)])[offsets]
+  next_q_vals = next_q_vals.astype(np.float32)
+  
+  rewards = np.array([e.halite_change for e in experience])
+  rewards = np.sign(rewards)*np.sqrt(np.abs(rewards))/halite_normalizer
+  last_episode_actions = np.array([e.last_episode_action for e in experience])
+  discounts = np.ones_like(rewards)*discount_factor
+  discounts[last_episode_actions] = 0
+  target_qs = rewards + (halite_base+discounts*(next_q_vals-halite_base))
+  
+  return target_qs
+  
+def get_mean_best_valid_qs_filled(experience, this_q_vals, episode_ids,
+                                  num_agents):
   valid_actions = np.stack([e.valid_actions for e in experience])
   num_actions = (valid_actions.sum(-1) > 0).sum((1, 2))
   best_q_sums = (valid_actions*this_q_vals).max(-1).sum((1, 2))
@@ -334,6 +366,13 @@ def aggregate_next_mixed_q_vals(
   offsets = episode_offsets+episode_steps*num_agents+agent_ids
   mean_best_valid_qs_filled = np.zeros((episode_durations.sum()*num_agents))
   mean_best_valid_qs_filled[offsets] = mean_best_valid_qs
+  
+  return mean_best_valid_qs_filled, offsets
+
+def aggregate_next_mixed_q_vals(
+    experience, episode_ids, this_q_vals, num_agents):
+  mean_best_valid_qs_filled, offsets = get_mean_best_valid_qs_filled(
+    experience, this_q_vals, episode_ids, num_agents)
   
   # Obtain the next q-values for all agents
   mean_best_valid_qs = mean_best_valid_qs_filled.reshape(
@@ -360,14 +399,8 @@ def aggregate_next_mixed_q_vals(
   
   return next_q_vals
 
-# Get the q learning observations, targets and observation weights
-def mixed_nega_q_learning(
-    model, experience, episode_ids, nan_coding_value, symmetric_experience,
-    num_agents_per_game):
-  # Evaluate the q values of the current and next state for all observations
-  this_states = np.stack([e.current_obs for e in experience])
-  this_q_vals = my_keras_predict(model, [this_states])[0]
-  
+def terminal_target_qs(experience, episode_ids, this_q_vals,
+                       num_agents_per_game):
   # Filter out next Q-values where the action is not valid. Filtered out since
   # every target computation performs a max operation.
   next_mixed_q_vals = aggregate_next_mixed_q_vals(
@@ -376,16 +409,50 @@ def mixed_nega_q_learning(
   # Compute the target action values
   target_qs = one_step_mixed_q_targets(next_mixed_q_vals, experience)
   
-  # Set the target for the action that was selected
+  return target_qs
+  
+def get_all_target_qs(this_states, experience, target_qs, nan_coding_value,
+                      this_q_vals):
+  # Set the target q values for the actions that were taken
   num_actions = len(ACTION_MAPPING)
   grid_size = this_states.shape[1]
   actions = np.stack([e.actions for e in experience])
-  one_hot_actions = (np.arange(num_actions) == actions[..., None]).astype(bool)
+  one_hot_actions = (np.arange(num_actions) == actions[..., 0, None]).astype(
+    bool)
+  
+  # Address the go nearest base tied credit assignment
+  one_hot_actions[
+    :, :, :, INVERSE_ACTION_MAPPING[GO_NEAREST_BASE]] = actions[..., 1] == 0
+  
+  # Set to the nan coding when the action was not selected
   all_target_qs = np.where(
     one_hot_actions,
     np.tile(target_qs.reshape((-1, 1, 1, 1)),
             [1, grid_size, grid_size, num_actions]),
     nan_coding_value*np.ones_like(this_q_vals))
+  
+  return all_target_qs
+
+# Get the q learning observations, targets and observation weights
+def q_learning(model, experience, episode_ids, nan_coding_value,
+               symmetric_experience, num_agents_per_game, reward_type,
+               halite_change_discount):
+  # Evaluate the q values of the current and next state for all observations
+  this_states = np.stack([e.current_obs for e in experience])
+  this_q_vals = my_keras_predict(model, [this_states])[0]
+  
+  if reward_type == "Terminal":
+    target_qs = terminal_target_qs(experience, episode_ids, this_q_vals,
+                                   num_agents_per_game)
+  elif reward_type == "Halite change":
+    target_qs = halite_change_target_qs(
+      experience, episode_ids, this_q_vals, halite_change_discount,
+      num_agents_per_game)
+  else:
+    raise ValueError("Not implemented")
+  
+  all_target_qs = get_all_target_qs(this_states, experience, target_qs,
+                                    nan_coding_value, this_q_vals)
   
   if symmetric_experience:
     # TODO: Add symmetric observations and symmetric targets.
@@ -481,8 +548,8 @@ def decreasing_sort_on_iteration_id(paths):
 def player_state_to_array(player_state, reward_divisor, ship_divisor):
   base_pos = np.expand_dims(player_state[1], -1)
   ship_pos = np.expand_dims(player_state[2], -1)
-  ship_halite = np.expand_dims(player_state[3], -1)/ship_divisor
-  reward = np.ones_like(base_pos)*player_state[0]/reward_divisor
+  ship_halite = np.expand_dims(np.sqrt(player_state[3]), -1)/ship_divisor
+  reward = np.ones_like(base_pos)*np.sqrt(player_state[0])/reward_divisor
   
   out = np.concatenate(
     [reward, base_pos, ship_pos, ship_halite], -1)
@@ -491,13 +558,13 @@ def player_state_to_array(player_state, reward_divisor, ship_divisor):
 
 # Combine the state to a single numpy array so it can be fed in to the
 # network
-def state_to_input(observation, reward_halite_divisor=100000,
-                   cell_halite_divisor=100000, ship_halite_divisor=100000):
+def state_to_input(observation, reward_halite_divisor=1e4,
+                   cell_halite_divisor=1e4, ship_halite_divisor=1e4):
   # Combine the Halite count, relative step fraction, my and opponent
   # ship and base information to a single numpy array
-  halite_count = np.expand_dims(observation['halite'], -1)/cell_halite_divisor
+  halite_count = np.maximum(0, np.expand_dims(observation['halite'], -1))
   log_halite_count = np.log10(1+halite_count)
-  halite_count = np.minimum(halite_count, np.ones_like(halite_count))
+  halite_count = np.sqrt(halite_count)/cell_halite_divisor
   relative_step = np.ones_like(halite_count)*observation['relative_step']
   my_data = player_state_to_array(
     observation['rewards_bases_ships'][0], reward_halite_divisor,

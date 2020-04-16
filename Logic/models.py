@@ -23,7 +23,8 @@ import utils
 # Second generation Convolutional ConnectX inspired network
 # This version is more flexible on the level of where data flows
 def convnet_simple(config):
-  input_shape, num_output_channels = utils.get_input_output_shapes(config)
+  input_shape, num_output_channels, num_q_functions = (
+    utils.get_input_output_shapes(config))
   inputs = [Input(input_shape, dtype='float32', name='input_array')]
   x = inputs[0]
   
