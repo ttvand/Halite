@@ -160,6 +160,72 @@ def get_episode_rewards(halite_scores):
       
   return rewards/(num_agents-1)
 
+def set_ignored_actions_to_None(
+    int_actions, dict_actions, prev_obs, current_obs, previous_observation,
+    current_observation):
+  grid_size = previous_observation['halite'].shape[0]
+  ship_None_action_id = utils.INVERSE_ACTION_MAPPING[utils.SHIP_NONE]
+  base_None_action_id = utils.INVERSE_ACTION_MAPPING[utils.BASE_NONE]
+  first_convert_spawn = True
+  for k in dict_actions:
+    # First make sure that the unit is still alive
+    if k in current_obs[1] or k in k in current_obs[2]:
+      # If the ship is still in the ship dict, it means it was not converted
+      if dict_actions[k] == "CONVERT" and k in current_obs[2]:
+        row, col = utils.row_col_from_square_grid_pos(
+          current_obs[2][k][0], grid_size)
+        
+        # The ship should still occupy the same square and not be converted
+        assert not (current_observation['rewards_bases_ships'][0][1][row, col])
+        assert (current_observation['rewards_bases_ships'][0][2][row, col])
+        
+        import pdb; pdb.set_trace()
+        # THIS SHOULD NEVER HAPPEN AFTER THE ENVIRONMENT FIX
+        int_actions[row, col, 0] = ship_None_action_id
+      
+      # Verify if spawn actions created a new ship at the spawn location
+      elif dict_actions[k] == "SPAWN":
+        base_pos = current_obs[1][k]
+        row, col = utils.row_col_from_square_grid_pos(base_pos, grid_size)
+        if not current_observation['rewards_bases_ships'][0][2][row, col]:
+          
+          # Check for ships that were moved to the base location, creating a
+          # conflict with the SPAWN command
+          ship_at_base = False
+          for sk in prev_obs[2]:
+            if sk in dict_actions:
+              if dict_actions[sk] in ["NORTH", "SOUTH", "EAST", "WEST"]:
+                prev_ship_pos = prev_obs[2][sk][0]
+                move_ship_pos = utils.move_ship_pos(
+                  prev_ship_pos, dict_actions[sk], grid_size)
+                if move_ship_pos == base_pos:
+                  ship_at_base = True
+                  break
+            else:
+              if prev_obs[2][sk][0] == base_pos:
+                ship_at_base = True
+                break
+              
+          if not ship_at_base:
+            import pdb; pdb.set_trace()
+            # THIS SHOULD NEVER HAPPEN AFTER THE ENVIRONMENT FIX
+            int_actions[row, col, 0] = ship_None_action_id
+      
+      # For move actions: consider if the ship has moved      
+      if dict_actions[k] in ["NORTH", "SOUTH", "EAST", "WEST"]:
+        if prev_obs[2][k][0] == current_obs[2][k][0]:
+          assert not first_convert_spawn
+          row, col = utils.row_col_from_square_grid_pos(
+            current_obs[2][k][0], grid_size)
+          import pdb; pdb.set_trace()
+          # THIS SHOULD NEVER HAPPEN AFTER THE ENVIRONMENT FIX
+          int_actions[row, col, 2] = base_None_action_id
+      
+    if dict_actions[k] in ["CONVERT", "SPAWN"]:
+      first_convert_spawn = False
+  
+  return int_actions
+
 def collect_experience_single_game(this_agent, other_agents, num_agents,
                                    agent_config, action_costs, verbose,
                                    game_id):
@@ -182,6 +248,7 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
     env_observation = env.state[0].observation
     player_current_observations = []
     player_current_obs = []
+    player_env_obs = []
     player_network_outputs = []
     player_actions = []
     player_mapped_actions = []
@@ -204,6 +271,7 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
           print("Actions: {}\n".format(mapped_actions))
         player_current_observations.append(current_observation)
         player_current_obs.append(current_obs[0][0])
+        player_env_obs.append(player_obs)
         player_network_outputs.append(network_outputs)
         player_actions.append(actions)
         player_mapped_actions.append(mapped_actions)
@@ -223,15 +291,22 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
 
     # Store the state transition data
     for i, active_id in enumerate(store_transition_ids):
-      # next_observation = utils.structured_env_obs(
-      #   env.configuration, env_observation, active_id)
+      next_observation = utils.structured_env_obs(
+        env.configuration, env_observation, active_id)
       # next_halite = next_observation['rewards_bases_ships'][0][0]
       # next_obs = utils.state_to_input(next_observation)
       agent_status = env.state[active_id].status
       next_halite = env.state[0].observation.players[active_id][0]
       
-      if next_halite-halite_scores[episode_step, active_id] < -5000:
-        import pdb; pdb.set_trace()
+      # if next_halite-halite_scores[episode_step, active_id] < -5000:
+      #   import pdb; pdb.set_trace()
+      
+      # Overwrite selected actions to None if the environment did not execute
+      # the requested action.
+      player_obs = env.state[0].observation.players[active_id]
+      player_actions[i] = set_ignored_actions_to_None(
+        player_actions[i], player_mapped_actions[active_id], player_env_obs[i],
+        player_obs, player_current_observations[i], next_observation)
       
       this_game_data.append(ExperienceStep(
         game_id,
@@ -335,13 +410,23 @@ def play_games(pool_name, num_games, max_pool_size, agent_config,
     experience.extend(this_game_data)
     # print("Episode duration: {:.2f}s".format(n_episode_duration[game_id])) 
     
+  # Compute the average reward for this agent and the average terminal halite
+  # count
+  first_final_halite = np.array([e.next_halite for e in experience if (
+    e.active_id == 0 and e.last_episode_action)])
+  first_final_halite_mean = first_final_halite.mean()
+  first_final_halite_median = np.median(first_final_halite)
+  first_avg_reward_per_step = np.array(
+    [e.halite_change for e in experience if (e.active_id == 0)]).mean()
+    
   print('Summed reward stats in {} games: {:.2f}'.format(
     num_games, reward_sum))
   if best_iteration_opponents is not None:
     print('Rewards versus opponent pool: {}'.format(opponent_id_rewards))
   
   return (experience, agent_full_paths[0], reward_sum/num_games,
-          num_opponent_agents)
+          num_opponent_agents, first_final_halite_mean,
+          first_final_halite_median,  first_avg_reward_per_step)
     
     
     

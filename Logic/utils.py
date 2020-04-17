@@ -13,22 +13,36 @@ from tensorflow.keras import backend as K
 from tensorflow.keras.models import load_model
 import tensorflow as tf
 # import time
+import yaml
 
 
 ###############################################################################
 # Acting utilities                                                            #
 ###############################################################################
 
+NORTH = "NORTH"
+SOUTH = "SOUTH"
+EAST = "EAST"
+WEST = "WEST"
+CONVERT = "CONVERT"
+SHIP_NONE = "SHIP_NONE"
 GO_NEAREST_BASE = "GO_NEAREST_BASE"
+SPAWN = "SPAWN"
+BASE_NONE = "BASE_NONE"
 ACTION_MAPPING = {
-  0: "NORTH",
-  1: "SOUTH",
-  2: "EAST",
-  3: "WEST",
-  4: "CONVERT",
-  5: "SPAWN",
-  6: None,
-  7: GO_NEAREST_BASE,
+  # Ship actions
+  0: NORTH,
+  1: SOUTH,
+  2: EAST,
+  3: WEST,
+  4: CONVERT,
+  5: SHIP_NONE,
+  6: GO_NEAREST_BASE,
+  
+  # Base (ship yard) actions. Separate since ships can be at bases and actions
+  # can be selected independently.
+  7: SPAWN,
+  8: BASE_NONE,
   }
 INVERSE_ACTION_MAPPING= {v: k for k, v in ACTION_MAPPING.items()}
 
@@ -49,9 +63,9 @@ def get_action_costs():
   env = make_environment('halite')
   action_costs = np.zeros((len(ACTION_MAPPING)))
   for k in ACTION_MAPPING:
-    if ACTION_MAPPING[k] == "CONVERT":
+    if ACTION_MAPPING[k] == CONVERT:
       action_costs[k] = env.configuration.convertCost
-    elif ACTION_MAPPING[k] == "SPAWN":
+    elif ACTION_MAPPING[k] == SPAWN:
       action_costs[k] = env.configuration.spawnCost
     else:
       action_costs[k] = 0
@@ -74,6 +88,20 @@ def get_base_pos(base_data, grid_size):
     base_pos[row, col] = 1
   
   return base_pos
+
+def get_col_row(size, pos):
+  return (pos % size, pos // size)
+
+def move_ship_pos(pos, direction, size):
+  col, row = get_col_row(size, pos)
+  if direction == "NORTH":
+    return pos - size if pos >= size else size ** 2 - size + col
+  elif direction == "SOUTH":
+    return col if pos + size >= size ** 2 else pos + size
+  elif direction == "EAST":
+    return pos + 1 if col < size - 1 else row * size
+  elif direction == "WEST":
+    return pos - 1 if col > 0 else (row + 1) * size - 1
 
 def get_ship_halite_pos(ship_data, grid_size):
   ship_pos = np.zeros((grid_size, grid_size))
@@ -186,33 +214,42 @@ def get_key_q_valid(q_values, player_obs, configuration, rewards_bases_ships):
   key_q_valid = []
   
   num_actions = len(ACTION_MAPPING)
-  for k in shipyard_keys:
-    # Declaration of base_valid in the loop to avoid overwriting with define
-    # by reference (otherwise this breaks!)
-    base_valid = np.ones((num_actions), dtype=np.bool)
-    base_valid[:5] = 0
-    base_valid[7] = 0
-    row, col = row_col_from_square_grid_pos(player_obs[1][k], grid_size)
-    
-    # No spawning when my agent currently has a ship at the base (clear waste)
-    base_valid[5] = not rewards_bases_ships[0][2][row, col]
-    key_q_valid.append((k, q_values[row, col], base_valid, row, col))
   
   for k in ship_keys:
     # Declaration of ship_valid in the loop to avoid overwriting with define
     # by reference (otherwise this breaks!)
-    ship_valid = np.ones((8), dtype=np.bool)
-    ship_valid[5] = 0
-    ship_valid[7] = bool(shipyard_keys)
+    ship_valid = np.ones((num_actions), dtype=np.bool)
+    ship_valid[INVERSE_ACTION_MAPPING[SPAWN]:] = 0
+    ship_valid[INVERSE_ACTION_MAPPING[GO_NEAREST_BASE]] = bool(shipyard_keys)
     row, col = row_col_from_square_grid_pos(player_obs[2][k][0], grid_size)
     
     # No converting at the location of my or opponent bases
-    ship_valid[4] = not any_bases[row, col]
-    # import pdb; pdb.set_trace()
-    # for i in range(len(rewards_bases_ships)):
-    #   ship_valid[4] = ship_valid[4] and not rewards_bases_ships[i][1][row, col]
-    key_q_valid.append((k, q_values[row, col], ship_valid, row, col))
+    ship_valid[INVERSE_ACTION_MAPPING[CONVERT]] = not any_bases[row, col]
     
+    # Overwrite rule: if the ship has halite and is at one of its bases:
+    # Don't move and deposit all halite cargo.
+    if any_bases[row, col] and player_obs[2][k][1] > 0:
+      ship_valid = np.zeros((num_actions), dtype=np.bool)
+      ship_valid[INVERSE_ACTION_MAPPING[SHIP_NONE]] = 1
+    
+    key_q_valid.append((k, q_values[row, col], ship_valid, row, col, True))
+  
+  for k in shipyard_keys:
+    # Declaration of base_valid in the loop to avoid overwriting with define
+    # by reference (otherwise this breaks!)
+    base_valid = np.ones((num_actions), dtype=np.bool)
+    base_valid[:INVERSE_ACTION_MAPPING[SPAWN]] = 0
+    base_valid[INVERSE_ACTION_MAPPING[GO_NEAREST_BASE]] = 0
+    row, col = row_col_from_square_grid_pos(player_obs[1][k], grid_size)
+    
+    # Commented since it appears that ship moves are processed before detecting
+    # collisions - filter out self destructive actions after sampling the ship
+    # actions.
+    # # No spawning when my agent currently has a ship at the base (clear waste)
+    # base_valid[INVERSE_ACTION_MAPPING["SPAWN"]] = not rewards_bases_ships[
+    #   0][2][row, col]
+    key_q_valid.append((k, q_values[row, col], base_valid, row, col, False))
+  
   return key_q_valid
 
 def get_direction_nearest_base(observation, row, col, grid_size):
@@ -225,7 +262,7 @@ def get_direction_nearest_base(observation, row, col, grid_size):
     base_row, base_col = row_col_from_square_grid_pos(
       observation[1][k], grid_size)
     if base_row == row and base_col == col:
-      return None
+      return SHIP_NONE
     
     horiz_diff = base_col-col
     horiz_dist = min(np.abs(horiz_diff),
@@ -246,20 +283,20 @@ def get_direction_nearest_base(observation, row, col, grid_size):
       observation[1][k], grid_size)
     if horiz_distances[i] > 0:
       if base_col > col:
-        shortest_dir = "EAST" if (base_col - col) <= half_grid else "WEST"
+        shortest_dir = EAST if (base_col - col) <= half_grid else WEST
       else:
-        shortest_dir = "WEST" if (col - base_col) <= half_grid else "EAST"
+        shortest_dir = WEST if (col - base_col) <= half_grid else EAST
       shortest_directions.append(shortest_dir)
     if vert_distances[i] > 0:
       if base_row > row:
-        shortest_dir = "SOUTH" if (base_row - row) <= half_grid else "NORTH"
+        shortest_dir = SOUTH if (base_row - row) <= half_grid else NORTH
       else:
-        shortest_dir = "NORTH" if (row - base_row) <= half_grid else "SOUTH"
+        shortest_dir = NORTH if (row - base_row) <= half_grid else SOUTH
       shortest_directions.append(shortest_dir)
       
   # Intentional: Do not only consider unique directions (
   # empowerment! Prefer the hill top to keep options open)
-  return np.random.choice(shortest_directions)
+  return str(np.random.choice(shortest_directions))
   
 
 # Q value based main function to act a single step
@@ -279,30 +316,29 @@ def get_agent_q_and_a(network, observation, player_obs, configuration,
   all_mapped_actions = {}
   grid_size = configuration.size
   num_actions = len(ACTION_MAPPING)
-  actions = -1*np.ones((grid_size, grid_size, 2)).astype(np.int32)
-  valid_actions = np.zeros((grid_size, grid_size, num_actions), dtype=np.bool)
+  actions = -1*np.ones((grid_size, grid_size, 3)).astype(np.int32)
+  valid_actions = np.zeros((grid_size, grid_size, num_actions, 2),
+                           dtype=np.bool)
   action_budget = player_obs[0]
   
-  for i, (k, q_sub_values, valid_sub_actions, r, c) in enumerate(
+  for i, (k, q_sub_values, valid_sub_actions, r, c, is_ship) in enumerate(
       all_key_q_valid):
     # Set actions we can't afford to invalid
     valid_sub_actions &= action_costs <= action_budget
     action_id = select_action_from_q(valid_sub_actions, q_sub_values,
                                      epsilon_greedy, exploration_parameter,
                                      pick_first_on_tie)
-    valid_actions[r, c] = valid_sub_actions
-    actions[r, c, 0] = action_id
+    valid_actions[r, c, :, int(is_ship)] = valid_sub_actions
+    actions[r, c, int(is_ship)] = action_id
     action_budget -= action_costs[action_id]
     mapped_action = ACTION_MAPPING[action_id]
     if mapped_action == GO_NEAREST_BASE:
       mapped_action = get_direction_nearest_base(player_obs, r, c, grid_size)
-      actions[r, c, 0] = INVERSE_ACTION_MAPPING[mapped_action]
-      actions[r, c, 1] = action_id
-    if mapped_action is not None:
+      actions[r, c, 1] = INVERSE_ACTION_MAPPING[mapped_action]
+      actions[r, c, 2] = action_id
+    if not mapped_action in [SHIP_NONE, BASE_NONE]:
       all_mapped_actions[k] = mapped_action
       
-  valid_actions = np.stack(valid_actions, 0)
-  
   return (obs_input, q_values, actions, all_mapped_actions, valid_actions)
 
 
@@ -321,11 +357,12 @@ def one_step_mixed_q_targets(next_mixed_q_vals, experience):
 
 def halite_change_target_qs(experience, episode_ids, this_q_vals,
                             discount_factor, num_agents,
-                            halite_base=0.5, halite_normalizer=1e4):
+                            halite_normalizer=1e4):
   # Filter out next Q-values where the action is not valid. Filtered out since
   # every target computation performs a max operation.
-  mean_best_valid_qs_filled, offsets = get_mean_best_valid_qs_filled(
-    experience, this_q_vals, episode_ids, num_agents)
+  mean_best_valid_qs_filled, offsets, num_unit_actions = (
+    get_mean_best_valid_qs_filled(
+      experience, this_q_vals, episode_ids, num_agents))
   
   # Obtain the next q-values for all agents
   next_q_vals = np.concatenate([mean_best_valid_qs_filled[num_agents:],
@@ -337,16 +374,17 @@ def halite_change_target_qs(experience, episode_ids, this_q_vals,
   last_episode_actions = np.array([e.last_episode_action for e in experience])
   discounts = np.ones_like(rewards)*discount_factor
   discounts[last_episode_actions] = 0
-  target_qs = rewards + (halite_base+discounts*(next_q_vals-halite_base))
+  target_qs = rewards + discounts*next_q_vals
   
   return target_qs
   
 def get_mean_best_valid_qs_filled(experience, this_q_vals, episode_ids,
                                   num_agents):
   valid_actions = np.stack([e.valid_actions for e in experience])
-  num_actions = (valid_actions.sum(-1) > 0).sum((1, 2))
-  best_q_sums = (valid_actions*this_q_vals).max(-1).sum((1, 2))
-  mean_best_valid_qs = (best_q_sums/num_actions)
+  num_unit_actions = (valid_actions.sum(-2) > 0).sum((1, 2))
+  best_q_sums = (valid_actions*np.expand_dims(this_q_vals, -1)).max(3).sum(
+    (1, 2))
+  mean_best_valid_qs = (best_q_sums.sum(-1)/num_unit_actions.sum(-1))
   
   # Compute the episode id offsets (agent and episode step offsets are easy).
   episode_steps = np.array([e.episode_step for e in experience])
@@ -367,11 +405,11 @@ def get_mean_best_valid_qs_filled(experience, this_q_vals, episode_ids,
   mean_best_valid_qs_filled = np.zeros((episode_durations.sum()*num_agents))
   mean_best_valid_qs_filled[offsets] = mean_best_valid_qs
   
-  return mean_best_valid_qs_filled, offsets
+  return mean_best_valid_qs_filled, offsets, num_unit_actions
 
 def aggregate_next_mixed_q_vals(
     experience, episode_ids, this_q_vals, num_agents):
-  mean_best_valid_qs_filled, offsets = get_mean_best_valid_qs_filled(
+  mean_best_valid_qs_filled, offsets, _ = get_mean_best_valid_qs_filled(
     experience, this_q_vals, episode_ids, num_agents)
   
   # Obtain the next q-values for all agents
@@ -417,12 +455,17 @@ def get_all_target_qs(this_states, experience, target_qs, nan_coding_value,
   num_actions = len(ACTION_MAPPING)
   grid_size = this_states.shape[1]
   actions = np.stack([e.actions for e in experience])
-  one_hot_actions = (np.arange(num_actions) == actions[..., 0, None]).astype(
-    bool)
+  one_hot_base_actions = (
+    np.arange(num_actions) == actions[..., 0, None]).astype(bool)
+  one_hot_ship_actions = (
+    np.arange(num_actions) == actions[..., 1, None]).astype(bool)
   
   # Address the go nearest base tied credit assignment
-  one_hot_actions[
-    :, :, :, INVERSE_ACTION_MAPPING[GO_NEAREST_BASE]] = actions[..., 1] == 0
+  one_hot_ship_actions[
+    :, :, :, INVERSE_ACTION_MAPPING[GO_NEAREST_BASE]] = (
+      actions[..., 2] == INVERSE_ACTION_MAPPING[GO_NEAREST_BASE])
+      
+  one_hot_actions = one_hot_base_actions + one_hot_ship_actions
   
   # Set to the nan coding when the action was not selected
   all_target_qs = np.where(
@@ -559,7 +602,8 @@ def player_state_to_array(player_state, reward_divisor, ship_divisor):
 # Combine the state to a single numpy array so it can be fed in to the
 # network
 def state_to_input(observation, reward_halite_divisor=1e4,
-                   cell_halite_divisor=1e4, ship_halite_divisor=1e4):
+                   cell_halite_divisor=1e4, ship_halite_divisor=1e4,
+                   combine_opponent_data=True):
   # Combine the Halite count, relative step fraction, my and opponent
   # ship and base information to a single numpy array
   halite_count = np.maximum(0, np.expand_dims(observation['halite'], -1))
@@ -575,6 +619,10 @@ def state_to_input(observation, reward_halite_divisor=1e4,
     opponent_data.append(player_state_to_array(
       observation['rewards_bases_ships'][i], reward_halite_divisor,
       ship_halite_divisor))
+  
+  # Optional: combine opponent data - sum bases and ships and drop opp rewards
+  if combine_opponent_data:
+    opponent_data = [np.stack(opponent_data).sum(0)[:, :, 1:]]
   
   state_inputs = np.concatenate(
     [halite_count, log_halite_count, relative_step, my_data] + opponent_data,
@@ -642,7 +690,7 @@ def update_learning_progress(experiment_name, data_vals):
   progress.to_csv(progress_path, index=False)
   
   
-def record_videos(agent_path, num_agents_per_game):
+def record_videos(agent_path, num_agents_per_game, extension_override=None):
   print("Generating videos of iteration {}".format(agent_path))
   env = make_environment(
     "halite", configuration={"agentExec": "LOCAL"})#, configuration={"agentTimeout": 10000, "actTimeout": 10000})
@@ -668,11 +716,11 @@ def record_videos(agent_path, num_agents_per_game):
     
     mapped_actions = {}
     action_budget = player_obs[0]
-    for i, (k, q_sub_values, valid_sub_actions, r, c) in enumerate(
+    
+    for i, (k, q_sub_values, valid_sub_actions, r, c, _) in enumerate(
         all_key_q_valid):
       # Set actions we can't afford to invalid
       valid_sub_actions &= action_costs <= action_budget
-      valid_sub_actions
       valid_sub_actions = np.where(valid_sub_actions)[0]
       best_q = q_sub_values[valid_sub_actions].max()
       best_a_id = np.where(q_sub_values[valid_sub_actions] == best_q)[0][0]
@@ -687,7 +735,7 @@ def record_videos(agent_path, num_agents_per_game):
       if mapped_action == GO_NEAREST_BASE:
         mapped_action = get_direction_nearest_base(
           player_obs, r, c, env_configuration.size)
-      if mapped_action is not None:
+      if not mapped_action in [SHIP_NONE, BASE_NONE]:
         mapped_actions[k] = mapped_action
        
     return mapped_actions
@@ -703,11 +751,20 @@ def record_videos(agent_path, num_agents_per_game):
     folder, extension = tuple(agent_path.rsplit('/', 1))
     videos_folder = os.path.join(folder, 'Videos')
     Path(videos_folder).mkdir(parents=True, exist_ok=True)
-    video_path = os.path.join(
-      videos_folder, extension[:-3] + ' - ' + video_type + '.html')
+    ext = extension[:-3] if extension_override is None else extension_override
+    video_path = os.path.join(videos_folder, ext+' - '+video_type+'.html')
     with open(video_path,"w") as f:
       f.write(game_recording)
   
+def store_config_on_first_run(config):
+  pool_name = config['pool_name']
+  this_folder = os.path.dirname(__file__)
+  agents_folder = os.path.join(this_folder, '../Agents/' + pool_name)
+  Path(agents_folder).mkdir(parents=True, exist_ok=True)
+  f = os.path.join(agents_folder, 'initial_config.yml')
+  if not os.path.exists(f):
+    with open(f, 'w') as outfile:
+      yaml.dump(config, outfile, default_flow_style=False)
     
 ###############################################################################
 # Submission utilities                                                        #

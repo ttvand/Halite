@@ -6,14 +6,16 @@ import numpy as np
 from shutil import copyfile
 import utils
 
+num_games = 50
 config = {
   'max_pool_size': 30, # 1 Means pure self play
-  'num_games': 50,
+  'num_games': num_games,
   'num_games_previous_iterations': 0,
-  'num_evaluation_games': 50,
+  'num_evaluation_games': num_games,
   'max_experience_buffer': 400,
   'min_new_iteration_win_rate': 0.6,
   'record_videos_new_iteration': True,
+  'record_videos_each_main_loop': True,
   
   # For value-based agents
   'boltzman_temperature_range_self_play': [1e-3, 3e-1], # LogUniform sampling
@@ -27,15 +29,16 @@ config = {
     # 'unet_start_neurons': 16,
     # 'unet_dropout_ratio': 0.2,
     
-    'pool_name': 'Pool 4 players - Halite change as reward',
+    'pool_name': 'Halite reward 4 players - independent ship - base actions',
+    'q_output_activation': ['sigmoid', 'none'][1],
     'model': models.convnet_simple,
     'filters_kernels': [
       (64, 3), (32, 3), (32, 3), (32, 3), (32, 3)],
     
     'action_mlp_layers': [32],
-    'augment_input_version': (True, 'v1'),
-    'epsilon_greedy': False,
-    'epsilon_range': [0.01, 0.3], # Min, max range
+    # 'augment_input_version': (True, 'v1'),
+    'epsilon_greedy': True,
+    'epsilon_range': [0.01, 0.5], # Min, max range
     'num_q_functions': 1,
     },
   
@@ -56,8 +59,9 @@ config = {
   }
 
 config['pool_name'] = config['agent_config']['pool_name']
-experience_buffer = utils.ExperienceBuffer(config['max_experience_buffer'])
+utils.store_config_on_first_run(config)
 utils.add_action_costs_to_config(config)
+experience_buffer = utils.ExperienceBuffer(config['max_experience_buffer'])
 current_agent_path = None
 mean_loss = None
 while True:
@@ -77,7 +81,8 @@ while True:
     config['max_pool_size']))
   config['agent_config']['boltzman_temperature_range'] = config[
     'boltzman_temperature_range_self_play']
-  experience, current_agent_path, avg_reward_sp, num_self_play_opponents = (
+  (experience, current_agent_path, avg_reward_sp, num_self_play_opponents,
+   avg_final_halite_sp, median_final_halite_sp, avg_reward_per_step_sp) = (
     collect_experience.play_games(
       pool_name=config['pool_name'],
       num_games=config['num_games'],
@@ -98,7 +103,7 @@ while True:
   avg_reward_prev = -1
   if config['play_previous_pools']:
     print('\nPlay against the best iterations of previous pools')
-    experience, _, avg_reward_prev, _ = collect_experience.play_games(
+    experience, _, avg_reward_prev, _, _, _, _ = collect_experience.play_games(
       pool_name=config['pool_name'],
       num_games=config['num_games_previous_iterations'],
       max_pool_size=config['max_pool_size'],
@@ -115,7 +120,7 @@ while True:
   print('\nPlay against the previous iteration')
   config['agent_config']['boltzman_temperature_range'] = config[
     'boltzman_temperature_range_eval']
-  experience, current_agent_path, avg_reward_eval, _ = (
+  experience, current_agent_path, avg_reward_eval, _, _, _, _ = (
     collect_experience.play_games(
       pool_name=config['pool_name'],
       num_games=config['num_evaluation_games'],
@@ -140,6 +145,10 @@ while True:
     if config['record_videos_new_iteration']:
       utils.record_videos(original_agent_path,
                           config['agent_config']['num_agents_per_game'])
+  elif config['record_videos_each_main_loop']:
+    utils.record_videos(current_agent_path,
+                        config['agent_config']['num_agents_per_game'],
+                        str(datetime.now())[:19])
     
   # Unique state fraction to get an idea of the diversity of experience
   frac_unique_states = np.unique(np.array([
@@ -151,6 +160,9 @@ while True:
     'Average reward self play': avg_reward_sp,
     'Average reward previous iterations': avg_reward_prev,
     'Average evaluation reward': avg_reward_eval,
+    'Average final halite self play': int(avg_final_halite_sp),
+    'Median final halite self play': median_final_halite_sp,
+    'Average halite change per step self play': int(avg_reward_per_step_sp),
     'Fraction of unique states': frac_unique_states,
     'Experience buffer size': experience_buffer.size(),
     'Mean loss': mean_loss,

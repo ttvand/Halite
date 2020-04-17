@@ -43,9 +43,13 @@ def convnet_simple(config):
       x = Dense(layer_size, activation='linear')(x)
       x = Activation('relu')(x)
     else:
-      # Sigmoid activation on the final Q-value function output layer
+      # Optional sigmoid activation on the final Q-value function output layer
       x = Dense(layer_size, activation='linear')(x)
-      outputs = [Activation('sigmoid')(x)]
+      
+      if config['q_output_activation'] == 'sigmoid':
+        x = Activation('sigmoid')(x)
+        
+      outputs = [x]
     
   return inputs, outputs
 

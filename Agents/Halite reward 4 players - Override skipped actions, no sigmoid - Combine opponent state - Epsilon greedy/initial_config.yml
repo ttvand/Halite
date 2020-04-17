@@ -1,0 +1,50 @@
+agent_config:
+  action_mlp_layers:
+  - 32
+  epsilon_greedy: true
+  epsilon_range:
+  - 0.01
+  - 0.5
+  filters_kernels:
+  - !!python/tuple
+    - 64
+    - 3
+  - &id001 !!python/tuple
+    - 32
+    - 3
+  - *id001
+  - *id001
+  - *id001
+  model: !!python/name:models.convnet_simple ''
+  num_agents_per_game: 4
+  num_q_functions: 1
+  pool_name: Halite reward 4 players - Override skipped actions, no sigmoid - Combine
+    opponent state - Epsilon greedy
+  q_output_activation: none
+boltzman_temperature_range_eval:
+- 0.001
+- 0.1
+boltzman_temperature_range_self_play:
+- 0.001
+- 0.3
+learning_config:
+  batch_size: 32
+  halite_change_discount: 0.99
+  learning_rate: 0.0001
+  max_episodes_per_learning_update_q_learning: 200
+  nan_coding_value: -999
+  num_epochs: 1
+  reward_type: Halite change
+  symmetric_experience: true
+max_experience_buffer: 400
+max_pool_size: 30
+min_new_iteration_win_rate: 0.6
+num_evaluation_games: 50
+num_games: 50
+num_games_previous_iterations: 0
+play_previous_pools: false
+pool_name: Halite reward 4 players - Override skipped actions, no sigmoid - Combine
+  opponent state - Epsilon greedy
+previous_pools: []
+record_videos_each_main_loop: true
+record_videos_new_iteration: true

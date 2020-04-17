@@ -1,4 +1,5 @@
 # Update the keras model
+import gc
 import numpy as np
 from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam
@@ -38,6 +39,11 @@ def update_agent(experience, episode_ids, agent_path, config, agent_config):
       batch_size=config['batch_size'], 
       epochs=config['num_epochs'],
       )
+    
+    del subset_experience
+    del x_train
+    del y_train
+    gc.collect()
     
     mean_losses.append(history.history['loss'])
   
