@@ -1,5 +1,5 @@
 # import tensorflow as tf
-# from tensorflow.keras import backend as K
+from tensorflow.keras import backend as K
 from tensorflow.keras.layers import Activation
 from tensorflow.keras.layers import Add
 from tensorflow.keras.layers import BatchNormalization
@@ -10,18 +10,18 @@ from tensorflow.keras.layers import Conv2DTranspose
 from tensorflow.keras.layers import Cropping2D
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Dropout
-# from tensorflow.keras.layers import Flatten
-# from tensorflow.keras.layers import Lambda
+from tensorflow.keras.layers import Flatten
+from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import Lambda
 from tensorflow.keras.layers import LayerNormalization
 from tensorflow.keras.layers import MaxPooling2D
-from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import Reshape
 from tensorflow.keras.layers import ZeroPadding2D
 
 import utils
 
 
-# Second generation Convolutional ConnectX inspired network
-# This version is more flexible on the level of where data flows
+# Starter convolutional network - single path convnet stack + mlp
 def convnet_simple(config):
   input_shape, num_output_channels, num_q_functions = (
     utils.get_input_output_shapes(config))
@@ -38,14 +38,68 @@ def convnet_simple(config):
   # MLP layers
   mlp_layers = config['action_mlp_layers'] + [num_output_channels]
   for i, layer_size in enumerate(mlp_layers):
+    x = Dense(layer_size, activation='linear')(x)
     if i < (len(mlp_layers)-1):
       # Non final fully connected layers
-      x = Dense(layer_size, activation='linear')(x)
       x = Activation('relu')(x)
     else:
       # Optional sigmoid activation on the final Q-value function output layer
-      x = Dense(layer_size, activation='linear')(x)
-      
+      if config['q_output_activation'] == 'sigmoid':
+        x = Activation('sigmoid')(x)
+        
+      outputs = [x]
+    
+  return inputs, outputs
+
+
+# Dual path convolutional network - global and local convnet followed by MLP
+def convnet_local_global_valid_conv(config):
+  input_shape, num_output_channels, num_q_functions = (
+    utils.get_input_output_shapes(config))
+  inputs = [Input(input_shape, dtype='float32', name='input_array')]
+  grid_size = input_shape[0]
+  
+  x = inputs[0]
+  
+  # Global convolutional layers
+  for i, (filters, kernel) in enumerate(
+      config['filters_kernels_global']):
+    padding = 'valid' if x.shape[1] > 10 else 'same'
+    x = Conv2D(filters=filters, kernel_size=kernel, strides=1,
+               padding=padding, activation='linear')(x)
+    if i < 2:
+      x = MaxPooling2D((2, 2))(x)
+    x = Activation('relu')(x)
+    
+  # Global MLP layers
+  x = Flatten()(x)
+  for layer_size in config['global_mlp_layers']:
+    x = Dense(layer_size, activation='linear')(x)
+    x = Activation('relu')(x)
+    
+  # Tile global features
+  x = Reshape((1, 1, layer_size))(x)
+  tiled_global = Lambda(lambda x: K.tile(x, (1, grid_size, grid_size, 1)))(x)
+  
+  # Concat global features with local inputs
+  x = concatenate([inputs[0], tiled_global])
+  
+  # Local convolutional layers
+  for conv_output_layer_id, (filters, kernel) in enumerate(
+      config['filters_kernels_local']):
+    x = Conv2D(filters=filters, kernel_size=kernel, strides=1,
+               padding='valid', activation='linear')(x)
+    x = Activation('relu')(x)
+
+  # Action MLP layers
+  mlp_layers = config['action_mlp_layers'] + [num_output_channels]
+  for i, layer_size in enumerate(mlp_layers):
+    x = Dense(layer_size, activation='linear')(x)
+    if i < (len(mlp_layers)-1):
+      # Non final fully connected layers
+      x = Activation('relu')(x)
+    else:
+      # Optional sigmoid activation on the final Q-value function output layer
       if config['q_output_activation'] == 'sigmoid':
         x = Activation('sigmoid')(x)
         

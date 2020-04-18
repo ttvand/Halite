@@ -53,7 +53,8 @@ def get_input_output_shapes(config):
   env_configuration = env.configuration
   env_observation = env.state[0].observation
   obs_input = state_to_input(structured_env_obs(
-    env_configuration, env_observation, active_id=0))
+    env_configuration, env_observation, active_id=0),
+    num_mirror_dim=config['num_mirror_dim'])
   num_actions = len(ACTION_MAPPING)
   
   return obs_input.shape, num_actions, config['num_q_functions']
@@ -191,7 +192,7 @@ def my_keras_predict(model, inputs, max_batch_size=200):
     batch_inputs = [b.astype(np.float32) for b in batch_inputs]
     if tf.__version__[0] == '2':
       # import pdb; pdb.set_trace()
-      # t=time.time(); model(batch_inputs); print(time.time()-t)
+      # import time; t=time.time(); model(batch_inputs); print(time.time()-t)
       batch_outputs = model(batch_inputs)
       if isinstance(batch_outputs, list):
         batch_outputs = [b.numpy() for b in batch_outputs]
@@ -301,13 +302,15 @@ def get_direction_nearest_base(observation, row, col, grid_size):
 
 # Q value based main function to act a single step
 def get_agent_q_and_a(network, observation, player_obs, configuration,
-                      epsilon_greedy, exploration_parameter,
+                      epsilon_greedy, exploration_parameter, num_mirror_dim,
                       action_costs, pick_first_on_tie):
   # Preprocess the state so it can be fed in to the network
-  obs_input = [np.expand_dims(state_to_input(observation), 0)]
+  obs_input = [np.expand_dims(state_to_input(
+    observation, mirror_at_edges=False), 0)]
+  obs_input_mirrored = [mirror_observation_edges(obs_input[0], num_mirror_dim)]
   
   # Obtain the q values
-  q_values = my_keras_predict(network, obs_input)[0][0]
+  q_values = my_keras_predict(network, obs_input_mirrored)[0][0]
   
   # Determine valid actions for each of the ships/shipyards
   all_key_q_valid = get_key_q_valid(
@@ -599,11 +602,42 @@ def player_state_to_array(player_state, reward_divisor, ship_divisor):
   
   return out
 
+def mirror_observation_edges(observation, num_mirror_dim):
+  if num_mirror_dim > 0:
+    # observation = np.arange(450).reshape((1,15,15,2)) # Debugging test
+    assert len(observation.shape) == 4
+    obs_shape = observation.shape
+    grid_size = obs_shape[1]
+    new_grid_size = grid_size + 2*num_mirror_dim
+    mirrored_obs = np.full(
+      (obs_shape[0], new_grid_size, new_grid_size, obs_shape[3]), np.nan)
+    
+    # Fill in the original data
+    mirrored_obs[:, num_mirror_dim:(-num_mirror_dim),
+                 num_mirror_dim:(-num_mirror_dim), :] = observation
+    
+    # Add top and bottom mirrored data
+    mirrored_obs[:, :num_mirror_dim, num_mirror_dim:(-num_mirror_dim),
+                 :] = observation[:, -num_mirror_dim:, :, :]
+    mirrored_obs[:, -num_mirror_dim:, num_mirror_dim:(-num_mirror_dim),
+                 :] = observation[:, :num_mirror_dim, :, :]
+    
+    # Add left and right mirrored data
+    mirrored_obs[:, :, :num_mirror_dim, :] = mirrored_obs[
+      :, :, -(2*num_mirror_dim):(-num_mirror_dim), :]
+    mirrored_obs[:, :, -num_mirror_dim:, :] = mirrored_obs[
+      :, :, num_mirror_dim:(2*num_mirror_dim), :]
+    
+    observation = mirrored_obs
+  
+  return observation
+
 # Combine the state to a single numpy array so it can be fed in to the
 # network
 def state_to_input(observation, reward_halite_divisor=1e4,
                    cell_halite_divisor=1e4, ship_halite_divisor=1e4,
-                   combine_opponent_data=True):
+                   combine_opponent_data=True, mirror_at_edges=True,
+                   num_mirror_dim=0):
   # Combine the Halite count, relative step fraction, my and opponent
   # ship and base information to a single numpy array
   halite_count = np.maximum(0, np.expand_dims(observation['halite'], -1))
@@ -627,6 +661,11 @@ def state_to_input(observation, reward_halite_divisor=1e4,
   state_inputs = np.concatenate(
     [halite_count, log_halite_count, relative_step, my_data] + opponent_data,
     -1).astype(np.float32)
+  
+  # Optional: mirror the observation at the boundaries (donut environment)
+  if mirror_at_edges:
+    state_inputs = mirror_observation_edges(
+      np.expand_dims(state_inputs, 0), num_mirror_dim)[0]
   
   return state_inputs
 
@@ -690,7 +729,8 @@ def update_learning_progress(experiment_name, data_vals):
   progress.to_csv(progress_path, index=False)
   
   
-def record_videos(agent_path, num_agents_per_game, extension_override=None):
+def record_videos(agent_path, num_agents_per_game, num_mirror_dim,
+                  extension_override=None):
   print("Generating videos of iteration {}".format(agent_path))
   env = make_environment(
     "halite", configuration={"agentExec": "LOCAL"})#, configuration={"agentTimeout": 10000, "actTimeout": 10000})
@@ -704,7 +744,8 @@ def record_videos(agent_path, num_agents_per_game, extension_override=None):
     player_obs = observation.players[active_id]
     
     # Preprocess the state so it can be fed in to the network
-    obs_input = np.expand_dims(state_to_input(current_observation), 0)
+    obs_input = np.expand_dims(state_to_input(
+      current_observation, num_mirror_dim), 0)
     
     # Obtain the q values
     q_values = model(obs_input).numpy()[0]

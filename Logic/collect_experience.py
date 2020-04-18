@@ -72,7 +72,8 @@ def load_pool_models(pool_name, max_pool_size, agent_config,
     agent_paths = create_initial_random_agents(agents_folder, agent_config)
     if record_videos_new_iteration:
       utils.record_videos(os.path.join(agents_folder, agent_paths[0]),
-                          agent_config['num_agents_per_game'])
+                          agent_config['num_agents_per_game'],
+                          agent_config['num_mirror_dim'])
   
   # Order the agent models on their iteration ids
   agent_paths = utils.decreasing_sort_on_iteration_id(agent_paths)
@@ -265,7 +266,8 @@ def collect_experience_single_game(this_agent, other_agents, num_agents,
          valid_actions) = utils.get_agent_q_and_a(
             game_agents[active_id], current_observation, player_obs,
             env.configuration, agent_config['epsilon_greedy'],
-            exploration_parameter, action_costs, pick_first_on_tie=False)
+            exploration_parameter, agent_config['num_mirror_dim'],
+            action_costs, pick_first_on_tie=False)
         if verbose:
           print("Player {} obs: {}".format(active_id, player_obs))
           print("Actions: {}\n".format(mapped_actions))

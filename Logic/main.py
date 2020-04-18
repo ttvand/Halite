@@ -29,11 +29,13 @@ config = {
     # 'unet_start_neurons': 16,
     # 'unet_dropout_ratio': 0.2,
     
-    'pool_name': 'Halite reward 4 players - independent ship - base actions',
+    'pool_name': 'Mirror input, add learned global features',
     'q_output_activation': ['sigmoid', 'none'][1],
-    'model': models.convnet_simple,
-    'filters_kernels': [
-      (64, 3), (32, 3), (32, 3), (32, 3), (32, 3)],
+    'model': models.convnet_local_global_valid_conv,
+    'filters_kernels_local': [(32, 3), (32, 3), (32, 3)],
+    'filters_kernels_global': [(16, 3), (16, 3), (16, 3)],
+    'global_mlp_layers': [32, 8],
+    'num_mirror_dim': 3, # For now, assumed to be equal to len(filters_kernels_local)
     
     'action_mlp_layers': [32],
     # 'augment_input_version': (True, 'v1'),
@@ -144,10 +146,13 @@ while True:
     
     if config['record_videos_new_iteration']:
       utils.record_videos(original_agent_path,
-                          config['agent_config']['num_agents_per_game'])
+                          config['agent_config']['num_agents_per_game'],
+                          config['agent_config']['num_mirror_dim']
+                          )
   elif config['record_videos_each_main_loop']:
     utils.record_videos(current_agent_path,
                         config['agent_config']['num_agents_per_game'],
+                        config['agent_config']['num_mirror_dim'],
                         str(datetime.now())[:19])
     
   # Unique state fraction to get an idea of the diversity of experience
@@ -157,6 +162,7 @@ while True:
     frac_unique_states))
   
   utils.update_learning_progress(config['pool_name'], {
+    'Time stamp': str(datetime.now()),
     'Average reward self play': avg_reward_sp,
     'Average reward previous iterations': avg_reward_prev,
     'Average evaluation reward': avg_reward_eval,
@@ -168,7 +174,6 @@ while True:
     'Mean loss': mean_loss,
     'Average self play episode length': av_self_play_episode_length,
     'Data agent path': data_agent_path,
-    'Time stamp': str(datetime.now()),
     })
   
   
