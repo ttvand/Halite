@@ -2,6 +2,7 @@ from datetime import datetime
 import rule_experience
 import rule_utils
 from shutil import copyfile
+from skopt import Optimizer
 import utils
 
 # Make sure the data is deterministic
@@ -10,7 +11,7 @@ import random
 np.random.seed(0)
 random.seed(0)
 
-NUM_GAMES = 10
+NUM_GAMES = 200
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES,
@@ -23,7 +24,7 @@ config = {
   'save_experience_data_to_disk': True,
   'use_multiprocessing': True,
   'play_fixed_pool_only': True,
-  'fixed_opponents_num_repeat_first_configs': 5,
+  'fixed_opponents_num_repeat_first_configs': 20,
   
   'num_agents_per_game': 4,
   'pool_name': 'Rule based with evolution II',
@@ -31,39 +32,49 @@ config = {
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
   'initial_config_ranges':{
-    'halite_config_setting_divisor': ((1e2, 1e3), "float", 0),
-    'max_ship_to_base_ratio': ((2, 6), "float", 0),
+    'halite_config_setting_divisor': ((2000.0, 4000.0), "float", 0),
+    'max_ship_to_base_ratio': ((4.0, 10.0), "float", 0),
     
     'min_spawns_after_conversions': ((0, 3), "int", 0),
-    'max_conversions_per_step': ((2, 10), "int", 1),
-    'friendly_ship_halite_conversion_constant': ((0.1, 0.5), "float", 0),
-    'friendly_bases_conversion_constant': ((0.1, 4), "float", 0),
-    'nearby_halite_conversion_constant': ((0.001, 0.3), "float", 0),
-    'conversion_score_threshold': ((-1, 1), "float", -float("inf")),
+    'max_conversions_per_step': ((1, 10), "int", 1),
+    'friendly_ship_halite_conversion_constant': ((0.0, 0.3), "float", 0),
+    'friendly_bases_conversion_constant': ((10.0, 20.0), "float", 0),
+    'nearby_halite_conversion_constant': ((0.0, 0.1), "float", 0),
+    'conversion_score_threshold': ((0.0, 10.0), "float", -float("inf")),
     
-    'halite_collect_constant': ((50, 100), "float", 0),
-    'nearby_halite_move_constant': ((0.2, 3), "float", 0),
-    'nearby_onto_halite_move_constant': ((10, 20), "float", 0),
-    'nearby_ships_move_constant': ((0.01, 0.05), "float", 0),
-    'nearby_base_move_constant': ((5, 30), "float", 0),
-    'nearby_move_onto_base_constant': ((5, 20), "float", 0),
-    'halite_dropoff_constant': ((50, 100), "float", 0),
+    'halite_collect_constant': ((0.0, 20.0), "float", 0),
+    'nearby_halite_move_constant': ((0.0, 2.0), "float", 0),
+    'nearby_onto_halite_move_constant': ((0.0, 4.0), "float", 0),
+    'nearby_ships_move_constant': ((0.0, 0.05), "float", 0),
+    'nearby_base_move_constant': ((0.0, 20.0), "float", 0),
+    'nearby_move_onto_base_constant': ((0.0, 10.0), "float", 0),
+    'halite_dropoff_constant': ((0.0, 30.0), "float", 0),
     
-    'max_spawns_per_step': ((2, 10), "int", 1),
-    'nearby_ship_halite_spawn_constant': ((0.3, 3), "float", 0),
-    'nearby_halite_spawn_constant': ((0.3, 3), "float", 0),
-    'remaining_budget_spawn_constant': ((0.001, 0.005), "float", 0),
-    'spawn_score_threshold': ((-1, 10), "float", -float("inf")),
+    'max_spawns_per_step': ((1, 10), "int", 1),
+    'nearby_ship_halite_spawn_constant': ((0.0, 2.0), "float", 0),
+    'nearby_halite_spawn_constant': ((0.0, 2.0), "float", 0),
+    'remaining_budget_spawn_constant': ((0.005, 0.02), "float", 0),
+    'spawn_score_threshold': ((0.0, 40.0), "float", -float("inf")),
     }
   }
 
 def main_rule_utils(config):
   rule_utils.store_config_on_first_run(config)
   experience_buffer = utils.ExperienceBuffer(config['max_experience_buffer'])
+  
+  fixed_pool_mode = config['play_fixed_pool_only']
+  if fixed_pool_mode:
+    # Prepare the Bayesian optimizer
+    config_keys = list(config['initial_config_ranges'].keys())
+    opt_range = [config['initial_config_ranges'][k][0] for k in config_keys]
+    opt = Optimizer(opt_range)
+    
+    next_fixed_opponent_suggested = None
+    iteration_config_rewards = None
+  
   while True:
     # Section 1: play games against agents of N previous pools
-    if config['num_games_previous_pools'] and not config[
-        'play_fixed_pool_only']:
+    if config['num_games_previous_pools'] and not fixed_pool_mode:
       print('\nPlay vs other rule based agents from the last {} pools'.format(
         config['max_pool_size']))
       (self_play_experience, rules_config_path,
@@ -80,7 +91,7 @@ def main_rule_utils(config):
       experience_buffer.add(self_play_experience)
     
     # Section 2: play games against agents of the previous pool
-    if config['num_games_evaluation'] and not config['play_fixed_pool_only']:
+    if config['num_games_evaluation'] and not fixed_pool_mode:
       print('\nPlay vs previous iteration')
       (evaluation_experience, rules_config_path,
        avg_reward_eval, _) = rule_experience.play_games(
@@ -92,6 +103,22 @@ def main_rule_utils(config):
           use_multiprocessing=config['use_multiprocessing'],
           )
       # experience_buffer.add(evaluation_experience)
+         
+    if fixed_pool_mode:
+      if iteration_config_rewards is not None:
+        # Update the optimizer using the most recent fixed opponent pool
+        # results
+        target_scores = np.reshape(-iteration_config_rewards[
+          'episode_reward'].values, [-1, config[
+            'fixed_opponents_num_repeat_first_configs']]).mean(1).tolist()
+        opt.tell(next_fixed_opponent_suggested, target_scores)
+      
+      # Select the next hyperparameters to try
+      next_fixed_opponent_suggested, next_fixed_opponent_configs = (
+        rule_utils.get_next_config_settings(
+          opt, config_keys, config['num_games_fixed_opponents_pool'],
+          config['fixed_opponents_num_repeat_first_configs'])
+        )
          
     # Section 3: play games against a fixed opponents pool
     if config['num_games_fixed_opponents_pool']:
@@ -108,14 +135,14 @@ def main_rule_utils(config):
            initial_config_ranges=config['initial_config_ranges'],
            use_multiprocessing=config['use_multiprocessing'],
            num_repeat_first_configs=config[
-             'fixed_opponents_num_repeat_first_configs']
+             'fixed_opponents_num_repeat_first_configs'],
+           first_config_overrides=next_fixed_opponent_configs,
            )
          )
       # experience_buffer.add(evaluation_experience)
     
     # Select the values that will be used to determine if a next iteration file
     # will be created
-    fixed_pool_mode = config['play_fixed_pool_only']
     serialized_raw_experience = fixed_opponents_experience if (
       fixed_pool_mode) else self_play_experience
          
@@ -173,10 +200,7 @@ def main_rule_utils(config):
     # Section 5: Update the latest config range using the data in the
     # experience buffer
     if rules_config_path is not None:
-      if fixed_pool_mode:
-        import pdb; pdb.set_trace()
-        print("TODO: Bayesian hyperparameter optimization")
-      else:
+      if not fixed_pool_mode:
         # Evolve the config ranges in a very simple gradient free way.
         rule_utils.evolve_config(
           rules_config_path, iteration_config_rewards,

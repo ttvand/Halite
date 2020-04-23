@@ -238,7 +238,8 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
                initial_config_ranges=None, verbose=False,
                record_videos_new_iteration=False,
                max_pool_size_exclude_current_from_opponent=5,
-               use_multiprocessing=False, num_repeat_first_configs=1):
+               use_multiprocessing=False, num_repeat_first_configs=1,
+               first_config_overrides=None):
   (this_agent, other_agents, agents_full_paths,
    opponent_names) = load_pool_agents(
     pool_name, max_pool_size, exclude_current_from_opponents,
@@ -259,7 +260,11 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
   for i in range(num_games):
     game_agents, opponent_ids, opponent_id_names = get_game_agents(
       this_agent, other_agents, opponent_names, num_agents)
-    if i % num_repeat_first_configs != 0:
+    if i % num_repeat_first_configs == 0:
+      if first_config_overrides is not None:
+        override_id = i // num_repeat_first_configs
+        game_agents[0] = first_config_overrides[override_id]
+    else:
       prev_first_agent_id = i - (i % num_repeat_first_configs)
       game_agents[0] = n_game_agents[prev_first_agent_id][0]
     n_game_agents.append(game_agents)

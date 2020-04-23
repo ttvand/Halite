@@ -599,6 +599,25 @@ def get_config_actions(config, observation, player_obs, env_config,
   
   return mapped_actions, halite_deposited, halite_spent
 
+def get_next_config_settings(
+    opt, config_keys, num_games, num_repeat_first_configs):
+  num_suggested = int(np.ceil(num_games/num_repeat_first_configs))
+  suggested = opt.ask(num_suggested)
+  
+  suggested_configs = [suggested_to_config(s, config_keys) for s in suggested]
+  
+  return suggested, suggested_configs
+
+def suggested_to_config(suggested, config_keys):
+  config = {}
+  for i, k in enumerate(config_keys):
+    config[k] = suggested[i]
+  for k in config_keys:
+    if k in HALITE_MULTIPLIER_CONFIG_ENTRIES:
+      config[k] /= config['halite_config_setting_divisor']
+      
+  return config
+
 def sample_from_config(config):
   sampled_config = {}
   for k in config:
@@ -643,12 +662,14 @@ def record_videos(agent_path, num_agents_per_game, extension_override=None,
   else:
     AGENT_CONFIGS = config_override_agents
   
+  # For some reason this needs to be verbose - list comprehension breaks the
+  # stochasticity of the agents.
   config_id_agents = [
     lambda observation: my_agent(observation, 0),
     lambda observation: my_agent(observation, 1),
     lambda observation: my_agent(observation, 2),
     lambda observation: my_agent(observation, 3),
-    ]
+    ][:num_agents_per_game]
   
   for video_type in ["self play", "random opponent"]:
     env.reset(num_agents=num_agents_per_game)
