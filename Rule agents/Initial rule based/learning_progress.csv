@@ -1,0 +1,12 @@
+Time stamp,Average reward self play,Average evaluation reward,Experience buffer size,Data rules path
+2020-04-20 09:37:01.110463,0.4283333333333333,0.2333333333333333,100,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 09:40:39.206887,0.5666666666666668,0.5666666666666665,200,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 09:44:26.435507,0.5216666666666664,0.4833333333333334,300,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 09:48:06.960626,0.535,0.5333333333333333,400,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 09:51:43.844315,0.4900000000000001,0.6,500,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 09:55:20.823114,0.5066666666666667,0.5833333333333333,600,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 09:58:57.661926,0.4966666666666667,0.3,700,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 10:02:34.412357,0.5333333333333333,0.5,800,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 10:06:14.206516,0.5283333333333335,0.5333333333333333,900,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 10:10:10.172222,0.4816666666666668,0.4833333333333333,1000,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json
+2020-04-20 10:14:13.170374,0.4899999999999999,0.2666666666666667,1100,/home/tom/Kaggle/Halite/Logic/../Rule agents/Initial rule based/iteration_1.json

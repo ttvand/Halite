@@ -101,12 +101,12 @@ def load_pool_models(pool_name, max_pool_size, agent_config,
   return this_agent, agents, agent_full_paths
 
 # Select a random opponent agent order based on the starting agent
-def get_game_agents(this_agent, agents, num_agents):
-  num_opponent_agents = len(agents)
+def get_game_agents(this_agent, opponent_agents, num_agents):
+  num_opponent_agents = len(opponent_agents)
   game_agents = [this_agent]
   for _ in range(num_agents-1):
     other_agent_id = np.random.randint(num_opponent_agents)
-    other_agent = agents[other_agent_id]
+    other_agent = opponent_agents[other_agent_id]
     game_agents.append(other_agent)
   this_agent_position = 0
     
@@ -369,7 +369,7 @@ def play_games(pool_name, num_games, max_pool_size, agent_config,
   num_opponent_agents = len(other_agents)
   
   
-  # Generate experience for a fixed number of games, alternating start turns
+  # Generate experience for a fixed number of games
   experience = []
   reward_sum = 0
   opponent_id_rewards = [(0, 0) for _ in range(num_opponent_agents)]
@@ -420,7 +420,12 @@ def play_games(pool_name, num_games, max_pool_size, agent_config,
   first_final_halite_median = np.median(first_final_halite)
   first_avg_reward_per_step = np.array(
     [e.halite_change for e in experience if (e.active_id == 0)]).mean()
-    
+  actions = np.stack([e.actions for e in experience if (
+    e.active_id == 0)])
+  act_ids, counts = np.unique(actions[actions>=0], return_counts=True)
+  mean_action_frac = np.zeros_like(action_costs)
+  mean_action_frac[act_ids] = counts/counts.sum()
+  
   print('Summed reward stats in {} games: {:.2f}'.format(
     num_games, reward_sum))
   if best_iteration_opponents is not None:
@@ -428,7 +433,8 @@ def play_games(pool_name, num_games, max_pool_size, agent_config,
   
   return (experience, agent_full_paths[0], reward_sum/num_games,
           num_opponent_agents, first_final_halite_mean,
-          first_final_halite_median,  first_avg_reward_per_step)
+          first_final_halite_median,  first_avg_reward_per_step,
+          mean_action_frac)
     
     
     

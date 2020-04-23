@@ -84,8 +84,8 @@ while True:
   config['agent_config']['boltzman_temperature_range'] = config[
     'boltzman_temperature_range_self_play']
   (experience, current_agent_path, avg_reward_sp, num_self_play_opponents,
-   avg_final_halite_sp, median_final_halite_sp, avg_reward_per_step_sp) = (
-    collect_experience.play_games(
+   avg_final_halite_sp, median_final_halite_sp, avg_reward_per_step_sp,
+   avg_action_fraction_sp) = collect_experience.play_games(
       pool_name=config['pool_name'],
       num_games=config['num_games'],
       max_pool_size=config['max_pool_size'],
@@ -95,7 +95,6 @@ while True:
       action_costs=config['action_costs'],
       record_videos_new_iteration=config['record_videos_new_iteration'],
       )
-    )
   experience_buffer.add(experience)
   episode_lengths = np.array(
     [e.episode_step for e in experience if e.last_episode_action])
@@ -105,15 +104,17 @@ while True:
   avg_reward_prev = -1
   if config['play_previous_pools']:
     print('\nPlay against the best iterations of previous pools')
-    experience, _, avg_reward_prev, _, _, _, _ = collect_experience.play_games(
-      pool_name=config['pool_name'],
-      num_games=config['num_games_previous_iterations'],
-      max_pool_size=config['max_pool_size'],
-      agent_config=config['agent_config'],
-      exclude_current_from_opponents=False,
-      symmetric_evaluation=config['learning_config']['symmetric_experience'],
-      action_costs=config['action_costs'],
-      best_iteration_opponents=config['previous_pools'],
+    experience, _, avg_reward_prev, _, _, _, _, _ = (
+      collect_experience.play_games(
+        pool_name=config['pool_name'],
+        num_games=config['num_games_previous_iterations'],
+        max_pool_size=config['max_pool_size'],
+        agent_config=config['agent_config'],
+        exclude_current_from_opponents=False,
+        symmetric_evaluation=config['learning_config']['symmetric_experience'],
+        action_costs=config['action_costs'],
+        best_iteration_opponents=config['previous_pools'],
+      )
       )
     experience_buffer.add(experience)
   
@@ -122,7 +123,7 @@ while True:
   print('\nPlay against the previous iteration')
   config['agent_config']['boltzman_temperature_range'] = config[
     'boltzman_temperature_range_eval']
-  experience, current_agent_path, avg_reward_eval, _, _, _, _ = (
+  experience, current_agent_path, avg_reward_eval, _, _, _, _, _ = (
     collect_experience.play_games(
       pool_name=config['pool_name'],
       num_games=config['num_evaluation_games'],
@@ -170,6 +171,8 @@ while True:
     'Median final halite self play': median_final_halite_sp,
     'Average halite change per step self play': int(avg_reward_per_step_sp),
     'Fraction of unique states': frac_unique_states,
+    'Average action fraction self play': str(
+      np.round(avg_action_fraction_sp, 3)),
     'Experience buffer size': experience_buffer.size(),
     'Mean loss': mean_loss,
     'Average self play episode length': av_self_play_episode_length,

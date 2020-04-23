@@ -30,7 +30,8 @@ def update_agent(experience, episode_ids, agent_path, config, agent_config):
     x_train, y_train = utils.q_learning(
       model, subset_experience, subset_experience_episode_ids,
       nan_coding_value, config['symmetric_experience'],
-      agent_config['num_agents_per_game'], config['reward_type'],
+      agent_config['num_agents_per_game'],
+      agent_config['num_mirror_dim'], config['reward_type'],
       config['halite_change_discount'])
     
     history = model.fit(

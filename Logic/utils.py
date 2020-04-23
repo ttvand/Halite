@@ -83,7 +83,7 @@ def row_col_from_square_grid_pos(pos, size):
   return row, col
 
 def get_base_pos(base_data, grid_size):
-  base_pos = np.zeros((grid_size, grid_size))
+  base_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
   for _, v in base_data.items():
     row, col = row_col_from_square_grid_pos(v, grid_size)
     base_pos[row, col] = 1
@@ -105,8 +105,8 @@ def move_ship_pos(pos, direction, size):
     return pos - 1 if col > 0 else (row + 1) * size - 1
 
 def get_ship_halite_pos(ship_data, grid_size):
-  ship_pos = np.zeros((grid_size, grid_size))
-  ship_halite = np.zeros((grid_size, grid_size))
+  ship_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  ship_halite = np.zeros((grid_size, grid_size), dtype=np.float32)
   for _, v in ship_data.items():
     row, col = row_col_from_square_grid_pos(v[0], grid_size)
     ship_pos[row, col] = 1
@@ -453,10 +453,9 @@ def terminal_target_qs(experience, episode_ids, this_q_vals,
   return target_qs
   
 def get_all_target_qs(this_states, experience, target_qs, nan_coding_value,
-                      this_q_vals):
+                      this_q_vals, num_mirror_dim):
   # Set the target q values for the actions that were taken
   num_actions = len(ACTION_MAPPING)
-  grid_size = this_states.shape[1]
   actions = np.stack([e.actions for e in experience])
   one_hot_base_actions = (
     np.arange(num_actions) == actions[..., 0, None]).astype(bool)
@@ -471,6 +470,7 @@ def get_all_target_qs(this_states, experience, target_qs, nan_coding_value,
   one_hot_actions = one_hot_base_actions + one_hot_ship_actions
   
   # Set to the nan coding when the action was not selected
+  grid_size = this_q_vals.shape[1]
   all_target_qs = np.where(
     one_hot_actions,
     np.tile(target_qs.reshape((-1, 1, 1, 1)),
@@ -481,10 +481,11 @@ def get_all_target_qs(this_states, experience, target_qs, nan_coding_value,
 
 # Get the q learning observations, targets and observation weights
 def q_learning(model, experience, episode_ids, nan_coding_value,
-               symmetric_experience, num_agents_per_game, reward_type,
-               halite_change_discount):
+               symmetric_experience, num_agents_per_game, num_mirror_dim,
+               reward_type, halite_change_discount):
   # Evaluate the q values of the current and next state for all observations
   this_states = np.stack([e.current_obs for e in experience])
+  this_states = mirror_observation_edges(this_states, num_mirror_dim)
   this_q_vals = my_keras_predict(model, [this_states])[0]
   
   if reward_type == "Terminal":
@@ -498,7 +499,8 @@ def q_learning(model, experience, episode_ids, nan_coding_value,
     raise ValueError("Not implemented")
   
   all_target_qs = get_all_target_qs(this_states, experience, target_qs,
-                                    nan_coding_value, this_q_vals)
+                                    nan_coding_value, this_q_vals,
+                                    num_mirror_dim)
   
   if symmetric_experience:
     # TODO: Add symmetric observations and symmetric targets.
@@ -553,12 +555,12 @@ def make_keras_picklable():
   cls.__setstate__ = __setstate__
 
 # Increment the iteration id of some .h5 model path
-def increment_iteration_id(path):
+def increment_iteration_id(path, extension='.h5'):
   underscore_parts = path.split('_')
   id_ = int(underscore_parts[-1].split('.')[0])
   incremented_id = id_+1
   new_path = '_'.join(underscore_parts[:-1]) + '_' + str(
-    incremented_id ) + '.h5'
+    incremented_id ) + extension
   
   return new_path
 
@@ -573,11 +575,12 @@ def load_models(paths):
   return models
 
 # Get the path in a folder with the highest iteration id
-def get_most_recent_agent_extension(folder):
-  agent_paths = [f for f in os.listdir(folder) if f[-3:]=='.h5']
+def get_most_recent_agent_extension(folder, extension='.h5'):
+  ext_length = len(extension)
+  agent_paths = [f for f in os.listdir(folder) if f[-ext_length:]==extension]
   
   # Order the agent models on their iteration ids
-  agent_paths = decreasing_sort_on_iteration_id(agent_paths)
+  agent_paths = decreasing_sort_on_iteration_id(agent_paths, extension)
   most_recent_agent_extension = agent_paths[0]
   
   return most_recent_agent_extension
@@ -737,6 +740,7 @@ def record_videos(agent_path, num_agents_per_game, num_mirror_dim,
   model = load_models([agent_path])[0]
   action_costs = get_action_costs()
   env_configuration = env.configuration
+  
   def my_agent(observation):
     active_id = observation.player
     current_observation = structured_env_obs(
@@ -744,8 +748,8 @@ def record_videos(agent_path, num_agents_per_game, num_mirror_dim,
     player_obs = observation.players[active_id]
     
     # Preprocess the state so it can be fed in to the network
-    obs_input = np.expand_dims(state_to_input(
-      current_observation, num_mirror_dim), 0)
+    obs_input = np.expand_dims(
+      state_to_input(current_observation, num_mirror_dim=num_mirror_dim), 0)
     
     # Obtain the q values
     q_values = model(obs_input).numpy()[0]
