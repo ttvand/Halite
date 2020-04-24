@@ -1,4 +1,6 @@
 from datetime import datetime
+import os
+import pandas as pd
 import rule_experience
 import rule_utils
 from shutil import copyfile
@@ -24,6 +26,7 @@ config = {
   'save_experience_data_to_disk': True,
   'use_multiprocessing': True,
   'play_fixed_pool_only': True,
+  'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': 20,
   
   'num_agents_per_game': 4,
@@ -61,13 +64,29 @@ config = {
 def main_rule_utils(config):
   rule_utils.store_config_on_first_run(config)
   experience_buffer = utils.ExperienceBuffer(config['max_experience_buffer'])
+  config_keys = list(config['initial_config_ranges'].keys())
   
   fixed_pool_mode = config['play_fixed_pool_only']
   if fixed_pool_mode:
+    fixed_opp_repeats = config['fixed_opponents_num_repeat_first_configs']
     # Prepare the Bayesian optimizer
-    config_keys = list(config['initial_config_ranges'].keys())
     opt_range = [config['initial_config_ranges'][k][0] for k in config_keys]
     opt = Optimizer(opt_range)
+    
+    if config['play_fixed_pool_fit_prev_data']:
+      fixed_pool_experience_path = rule_utils.get_self_play_experience_path(
+        config['pool_name'])
+      if os.path.exists(fixed_pool_experience_path):
+        iteration_config_rewards = pd.read_csv(fixed_pool_experience_path)
+        target_scores = np.reshape(-iteration_config_rewards[
+          'episode_reward'].values, [-1, fixed_opp_repeats]).mean(1).tolist()
+        target_rows = np.arange(len(target_scores))*fixed_opp_repeats
+        suggested_t = [iteration_config_rewards[k].values[
+          target_rows].tolist() for k in config_keys]
+        suggested = list(map(list, zip(*suggested_t)))
+        import pdb; pdb.set_trace()
+        opt.tell(suggested, target_scores)
+      
     
     next_fixed_opponent_suggested = None
     iteration_config_rewards = None
@@ -109,15 +128,14 @@ def main_rule_utils(config):
         # Update the optimizer using the most recent fixed opponent pool
         # results
         target_scores = np.reshape(-iteration_config_rewards[
-          'episode_reward'].values, [-1, config[
-            'fixed_opponents_num_repeat_first_configs']]).mean(1).tolist()
+          'episode_reward'].values, [-1, fixed_opp_repeats]).mean(1).tolist()
         opt.tell(next_fixed_opponent_suggested, target_scores)
       
       # Select the next hyperparameters to try
       next_fixed_opponent_suggested, next_fixed_opponent_configs = (
         rule_utils.get_next_config_settings(
           opt, config_keys, config['num_games_fixed_opponents_pool'],
-          config['fixed_opponents_num_repeat_first_configs'])
+          fixed_opp_repeats)
         )
          
     # Section 3: play games against a fixed opponents pool
@@ -134,8 +152,7 @@ def main_rule_utils(config):
            fixed_opponent_pool=True,
            initial_config_ranges=config['initial_config_ranges'],
            use_multiprocessing=config['use_multiprocessing'],
-           num_repeat_first_configs=config[
-             'fixed_opponents_num_repeat_first_configs'],
+           num_repeat_first_configs=fixed_opp_repeats,
            first_config_overrides=next_fixed_opponent_configs,
            )
          )
@@ -149,7 +166,7 @@ def main_rule_utils(config):
     # Optionally append the experience of interest to disk
     iteration_config_rewards = (
       rule_utils.serialize_game_experience_for_learning(
-        serialized_raw_experience, fixed_pool_mode))
+        serialized_raw_experience, fixed_pool_mode, config_keys))
     if config['save_experience_data_to_disk']:
       experience_features_rewards_path = rule_utils.write_experience_data(
         config['pool_name'], iteration_config_rewards)

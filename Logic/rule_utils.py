@@ -45,7 +45,6 @@ for dim in range(3, 16, 2):
   
   GAUSSIAN_2D_KERNELS[dim] = kernel
 
-
 def get_action_costs():
   costs = utils.get_action_costs().tolist()
   actions = utils.INVERSE_ACTION_MAPPING.keys()
@@ -81,7 +80,8 @@ def update_learning_progress(experiment_name, data_vals):
   
   progress.to_csv(progress_path, index=False)
   
-def serialize_game_experience_for_learning(experience, only_store_first):
+def serialize_game_experience_for_learning(
+    experience, only_store_first, config_keys):
   # Create a row for each config - result pair
   list_of_dicts_x = [c for d in experience for c in d.agent_configs]
   dict_of_lists_x = {
@@ -117,15 +117,24 @@ def serialize_game_experience_for_learning(experience, only_store_first):
     num_agents = len(experience[0].terminal_halite)
     combined_df = combined_df.iloc[::num_agents]
     
+  for k in config_keys:
+    if k in HALITE_MULTIPLIER_CONFIG_ENTRIES:
+      combined_df[k] *= combined_df['halite_config_setting_divisor']
+    
   return combined_df
-  
-def write_experience_data(experiment_name, data):
-  # Append to the learning progress line if the file exists.
-  # Otherwise: create it
+
+def get_self_play_experience_path(experiment_name):
   this_folder = os.path.dirname(__file__)
   agents_folder = os.path.join(
     this_folder, '../Rule agents/' + experiment_name)
   data_path = os.path.join(agents_folder, 'self_play_experience.csv')
+  
+  return data_path
+  
+def write_experience_data(experiment_name, data):
+  # Append to the learning progress line if the file exists.
+  # Otherwise: create it
+  data_path = get_self_play_experience_path(experiment_name)
   
   if os.path.exists(data_path):
     old_data = pd.read_csv(data_path)
@@ -158,8 +167,6 @@ def plot_reward_versus_features(
   for i, c in enumerate(other_columns):
     ax = fig.add_subplot(grid_size, grid_size, i+1)
     x_vals = data[c].values
-    if c in HALITE_MULTIPLIER_CONFIG_ENTRIES:
-      x_vals *= data['halite_config_setting_divisor'].values
     if np.abs(x_vals - x_vals.astype(np.int)).mean() < 1e-8:
       # Drop data points corresponding with tied results to make the
       # categorical distinction more apparent
@@ -631,7 +638,7 @@ def sample_from_config(config):
   
   for k in config:
     if k in HALITE_MULTIPLIER_CONFIG_ENTRIES:
-        sampled_config[k] /= sampled_config['halite_config_setting_divisor']
+      sampled_config[k] /= sampled_config['halite_config_setting_divisor']
   
   return sampled_config
 
