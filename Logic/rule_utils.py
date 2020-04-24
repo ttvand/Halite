@@ -124,6 +124,13 @@ def serialize_game_experience_for_learning(
     
   return combined_df
 
+def clip_ranges(values, ranges):
+  for i in range(len(values)):
+    values[i] = np.maximum(np.minimum(np.array(values[i]),
+                                      ranges[i][1]), ranges[i][0]).tolist()
+    
+  return values
+
 def get_self_play_experience_path(experiment_name):
   this_folder = os.path.dirname(__file__)
   agents_folder = os.path.join(

@@ -27,10 +27,10 @@ config = {
   'use_multiprocessing': True,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
-  'fixed_opponents_num_repeat_first_configs': 20,
+  'fixed_opponents_num_repeat_first_configs': 200,
   
   'num_agents_per_game': 4,
-  'pool_name': 'Rule based with evolution II',
+  'pool_name': 'Rule based with evolution III',
 
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
@@ -85,9 +85,12 @@ def main_rule_utils(config):
         target_rows = np.arange(len(target_scores))*fixed_opp_repeats
         suggested_t = [iteration_config_rewards[k].values[
           target_rows].tolist() for k in config_keys]
+        suggested_t = rule_utils.clip_ranges(suggested_t, opt_range)
         suggested = list(map(list, zip(*suggested_t)))
-        opt.tell(suggested, target_scores)
-      
+        opt_output = opt.tell(suggested, target_scores)
+        # import pdb; pdb.set_trace()
+        # print(opt_output.x, opt_output.fun)
+        
     next_fixed_opponent_suggested = None
     iteration_config_rewards = None
   
