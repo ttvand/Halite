@@ -19,6 +19,7 @@ SPAWN = "SPAWN"
 MOVE_DIRECTIONS = [None, "NORTH", "SOUTH", "EAST", "WEST"]
 
 HALITE_MULTIPLIER_CONFIG_ENTRIES = [
+          "ship_halite_cargo_conversion_bonus_constant",
           "friendly_ship_halite_conversion_constant",
           "nearby_halite_conversion_constant",
           
@@ -294,10 +295,9 @@ def decide_ship_convert_actions(
     # Don't convert at an existing base
     conversion_scores[i] -= 1e9*my_bases[row, col]
     
-    # Subtract the ship halite from the conversion scores (it would get lost,
-    # unless if there is no friendly bases and it would get lost either way)
-    conversion_scores[i] -= player_obs[2][ship_k][1]/config[
-      'halite_config_setting_divisor']*can_deposit_halite
+    # Add the ship halite to the conversion scores (it is added to the score)
+    conversion_scores[i] += player_obs[2][ship_k][1]*config[
+      'ship_halite_cargo_conversion_bonus_constant']
     
     # Add distance adjusted friendly nearby ship halite to the conversion
     # scores

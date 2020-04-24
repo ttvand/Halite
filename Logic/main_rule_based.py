@@ -40,6 +40,7 @@ config = {
     
     'min_spawns_after_conversions': ((0, 3), "int", 0),
     'max_conversions_per_step': ((1, 10), "int", 1),
+    'ship_halite_cargo_conversion_bonus_constant': ((0.0, 5.0), "float", 0),
     'friendly_ship_halite_conversion_constant': ((0.0, 0.3), "float", 0),
     'friendly_bases_conversion_constant': ((10.0, 20.0), "float", 0),
     'nearby_halite_conversion_constant': ((0.0, 0.1), "float", 0),
@@ -77,6 +78,7 @@ def main_rule_utils(config):
       fixed_pool_experience_path = rule_utils.get_self_play_experience_path(
         config['pool_name'])
       if os.path.exists(fixed_pool_experience_path):
+        print('\nBayesian fit to earlier experiments')
         iteration_config_rewards = pd.read_csv(fixed_pool_experience_path)
         target_scores = np.reshape(-iteration_config_rewards[
           'episode_reward'].values, [-1, fixed_opp_repeats]).mean(1).tolist()
@@ -84,10 +86,8 @@ def main_rule_utils(config):
         suggested_t = [iteration_config_rewards[k].values[
           target_rows].tolist() for k in config_keys]
         suggested = list(map(list, zip(*suggested_t)))
-        import pdb; pdb.set_trace()
         opt.tell(suggested, target_scores)
       
-    
     next_fixed_opponent_suggested = None
     iteration_config_rewards = None
   
