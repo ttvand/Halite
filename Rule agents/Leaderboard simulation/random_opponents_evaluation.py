@@ -1,9 +1,11 @@
 from kaggle_environments import evaluate as evaluate_game
+from kaggle_environments import make as make_environment
 from kaggle_environments import utils as environment_utils
 import multiprocessing as mp
 import numpy as np
 import os
 import pandas as pd
+from pathlib import Path
 
 
 # Evaluation parameters - agents from the agents pool are selected
@@ -14,6 +16,7 @@ import pandas as pd
 num_agents_per_game = 4
 num_games = 100
 use_multiprocessing = True
+generate_pair_videos = True
 
 
 # List the path of all evaluated agents
@@ -99,3 +102,25 @@ results = pd.DataFrame.from_dict({
   )
 print(results)
 
+if generate_pair_videos:
+  env = make_environment("halite", configuration={"agentExec": "LOCAL"})
+  for i in range(0, num_agents-1):
+    first_agent_file = environment_utils.read_file(agent_full_paths[i])
+    first_agent = environment_utils.get_last_callable(first_agent_file)
+    for j in range(i+1, num_agents):
+      ext = agent_extensions[i][:-3] + " ***versus*** " + agent_extensions[j][:-3]
+      
+      second_agent_file = environment_utils.read_file(agent_full_paths[j])
+      second_agent = environment_utils.get_last_callable(second_agent_file)
+      
+      agents = [first_agent, second_agent, second_agent, first_agent]
+      env.reset(num_agents=num_agents_per_game)
+      env.run(agents)
+      
+      # Save the HTML recording in the videos folder
+      game_recording = env.render(mode="html", width=800, height=600)
+      videos_folder = os.path.join(agents_folder, '../Videos')
+      Path(videos_folder).mkdir(parents=True, exist_ok=True)
+      video_path = os.path.join(videos_folder, ext+'.html')
+      with open(video_path,"w") as f:
+        f.write(game_recording)
