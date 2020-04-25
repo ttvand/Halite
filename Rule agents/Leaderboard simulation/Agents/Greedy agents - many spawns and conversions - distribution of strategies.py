@@ -532,16 +532,14 @@ def get_config_actions(config, observation, player_obs, env_config,
 
 
 ###############################################################################
-ENV_CONFIGURATION = make_environment("halite").configuration
 CONFIG = sample_from_config(CONFIGS)
 
-def my_agent(observation):
+def my_agent(observation, env_config):
   active_id = observation.player
-  current_observation = structured_env_obs(
-    ENV_CONFIGURATION, observation, active_id)
+  current_observation = structured_env_obs(env_config, observation, active_id)
   player_obs = observation.players[active_id]
   
   mapped_actions, _, _ = get_config_actions(
-    CONFIG, current_observation, player_obs, ENV_CONFIGURATION)
+    CONFIG, current_observation, player_obs, env_config)
      
   return mapped_actions

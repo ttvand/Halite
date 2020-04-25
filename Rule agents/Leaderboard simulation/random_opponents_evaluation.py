@@ -12,7 +12,7 @@ import pandas as pd
 # Execution time scales linearly with the number of evaluation games and is
 # independent of the number of agents in the pool.
 num_agents_per_game = 4
-num_games = 100
+num_games = 10
 use_multiprocessing = True
 
 

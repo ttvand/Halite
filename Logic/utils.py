@@ -735,13 +735,10 @@ def update_learning_progress(experiment_name, data_vals):
 def record_videos(agent_path, num_agents_per_game, num_mirror_dim,
                   extension_override=None):
   print("Generating videos of iteration {}".format(agent_path))
-  env = make_environment(
-    "halite", configuration={"agentExec": "LOCAL"})#, configuration={"agentTimeout": 10000, "actTimeout": 10000})
   model = load_models([agent_path])[0]
   action_costs = get_action_costs()
-  env_configuration = env.configuration
   
-  def my_agent(observation):
+  def my_agent(observation, env_configuration):
     active_id = observation.player
     current_observation = structured_env_obs(
       env_configuration, observation, active_id)
@@ -785,6 +782,8 @@ def record_videos(agent_path, num_agents_per_game, num_mirror_dim,
        
     return mapped_actions
   
+  env = make_environment(
+    "halite", configuration={"agentExec": "LOCAL"})#, configuration={"agentTimeout": 10000, "actTimeout": 10000})
   for video_type in ["random opponent", "self play"]:
     env.reset(num_agents=num_agents_per_game)
     agents = [my_agent]*num_agents_per_game if video_type == "self play" else [
