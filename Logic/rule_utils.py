@@ -1,4 +1,4 @@
-import copy
+# import copy
 import json
 from kaggle_environments import make as make_environment
 import matplotlib.pyplot as plt
@@ -275,7 +275,8 @@ def decide_ship_convert_actions(
   max_conversions = int((
      remaining_budget - config['min_spawns_after_conversions']*spawn_cost)/(
       convert_cost))
-  max_conversions = min(max_conversions, config['max_conversions_per_step'])
+  max_conversions = min(max_conversions,
+                        int(config['max_conversions_per_step']))
   my_bases = observation['rewards_bases_ships'][0][1]
   my_next_ships = observation['rewards_bases_ships'][0][2]
   obs_halite = np.maximum(0, observation['halite'])
@@ -524,7 +525,7 @@ def decide_existing_base_spawns(
 
   spawn_cost = env_config.spawnCost
   max_spawns = int(remaining_budget/spawn_cost)
-  max_spawns = min(max_spawns, config['max_spawns_per_step'])
+  max_spawns = min(max_spawns, int(config['max_spawns_per_step']))
   num_next_bases = my_next_bases.sum()
   num_ships = my_next_ships.sum()
   max_allowed_ships = num_next_bases*config['max_ship_to_base_ratio']
