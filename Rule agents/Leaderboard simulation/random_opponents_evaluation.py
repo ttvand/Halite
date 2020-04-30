@@ -14,9 +14,10 @@ from pathlib import Path
 # Execution time scales linearly with the number of evaluation games and is
 # independent of the number of agents in the pool.
 num_agents_per_game = 4
-num_games = 100
+num_games = 10
 use_multiprocessing = True
 generate_pair_videos = True
+generate_self_play_videos = True
 
 
 # List the path of all evaluated agents
@@ -101,26 +102,47 @@ results = pd.DataFrame.from_dict({
   }
   )
 print(results)
-
+agents_paths_video_names = []
 if generate_pair_videos:
-  env = make_environment("halite", configuration={"agentExec": "LOCAL"})
   for i in range(0, num_agents-1):
-    first_agent_file = environment_utils.read_file(agent_full_paths[i])
-    first_agent = environment_utils.get_last_callable(first_agent_file)
+    first_agent_path = agent_full_paths[i]
     for j in range(i+1, num_agents):
-      ext = agent_extensions[i][:-3] + " ***versus*** " + agent_extensions[j][:-3]
+      second_agent_path = agent_full_paths[j]
+      agent_paths = [first_agent_path, second_agent_path, second_agent_path,
+                     first_agent_path]
+      video_name = agent_extensions[i][:-3] + " ***versus*** " + (
+        agent_extensions[j][:-3])
+      agents_paths_video_names.append((agent_paths, video_name))
+
+if generate_self_play_videos:
+  for i in range(num_agents):
+    agent_path = agent_full_paths[i]
+    agent_paths = [agent_path, agent_path, agent_path, agent_path]
+    video_name = agent_extensions[i][:-3] + " ***self play***"
+    agents_paths_video_names.append((agent_paths, video_name))
+
+if agents_paths_video_names:
+  # Load all agent callables once (not really that much more performant)
+  agent_callables = {}
+  for i in range(num_agents): 
+    agent_path = agent_full_paths[i]
+    agent_file = environment_utils.read_file(agent_path)
+    agent_callables[agent_path] = environment_utils.get_last_callable(
+      agent_file)
+    
+  env = make_environment("halite", configuration={"agentExec": "LOCAL"})
+  for agent_paths, video_name in agents_paths_video_names:
+    agents = []
+    for p in agent_paths:
+      agents.append(agent_callables[p])
       
-      second_agent_file = environment_utils.read_file(agent_full_paths[j])
-      second_agent = environment_utils.get_last_callable(second_agent_file)
-      
-      agents = [first_agent, second_agent, second_agent, first_agent]
-      env.reset(num_agents=num_agents_per_game)
-      env.run(agents)
-      
-      # Save the HTML recording in the videos folder
-      game_recording = env.render(mode="html", width=800, height=600)
-      videos_folder = os.path.join(agents_folder, '../Videos')
-      Path(videos_folder).mkdir(parents=True, exist_ok=True)
-      video_path = os.path.join(videos_folder, ext+'.html')
-      with open(video_path,"w") as f:
-        f.write(game_recording)
+    env.reset(num_agents=len(agents))
+    env.run(agents)
+    
+    # Save the HTML recording in the videos folder
+    game_recording = env.render(mode="html", width=800, height=600)
+    videos_folder = os.path.join(agents_folder, '../Videos')
+    Path(videos_folder).mkdir(parents=True, exist_ok=True)
+    video_path = os.path.join(videos_folder, video_name+'.html')
+    with open(video_path,"w") as f:
+      f.write(game_recording)
