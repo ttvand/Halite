@@ -13,54 +13,55 @@ import random
 np.random.seed(0)
 random.seed(0)
 
-NUM_GAMES = 200
+NUM_GAMES = 20
 config = {
   'max_pool_size': 30, # 1 Means pure self play
-  'num_games_previous_pools': NUM_GAMES,
-  'num_games_evaluation': NUM_GAMES,
+  'num_games_previous_pools': NUM_GAMES*0,
+  'num_games_evaluation': NUM_GAMES*0,
   'num_games_fixed_opponents_pool': NUM_GAMES,
   'max_experience_buffer': 10000,
   'min_new_iteration_win_rate': 0.6,
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': True,
+  'use_multiprocessing': False,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
-  'fixed_opponents_num_repeat_first_configs': 200,
+  'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
   
   'num_agents_per_game': 4,
-  'pool_name': 'Rule based with evolution III',
+  'pool_name': 'Rule based with evolution I',
 
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
   'initial_config_ranges':{
-    'halite_config_setting_divisor': ((2000.0, 4000.0), "float", 0),
-    'max_ship_to_base_ratio': ((4.0, 10.0), "float", 0),
+    'halite_config_setting_divisor': ((1000.0, 20000.0), "float", 0),
+    'max_ship_to_base_ratio': ((4.0, 12.0), "float", 0),
     
     'min_spawns_after_conversions': ((0, 3), "int", 0),
-    'max_conversions_per_step': ((1, 10), "int", 1),
-    'ship_halite_cargo_conversion_bonus_constant': ((0.0, 5.0), "float", 0),
-    'friendly_ship_halite_conversion_constant': ((0.0, 0.3), "float", 0),
-    'friendly_bases_conversion_constant': ((10.0, 20.0), "float", 0),
-    'nearby_halite_conversion_constant': ((0.0, 0.1), "float", 0),
-    'conversion_score_threshold': ((0.0, 10.0), "float", -float("inf")),
+    'max_conversions_per_step': ((1, 4), "int", 1),
+    'ship_halite_cargo_conversion_bonus_constant': ((0.0, 20.0), "float", 0),
+    'friendly_ship_halite_conversion_constant': ((0.0, 2.0), "float", 0),
+    'friendly_bases_conversion_constant': ((5.0, 200.0), "float", 0),
+    'nearby_halite_conversion_constant': ((0.0, 2.0), "float", 0),
+    'conversion_score_threshold': ((0.0, 30.0), "float", -float("inf")),
     
-    'halite_collect_constant': ((0.0, 20.0), "float", 0),
-    'nearby_halite_move_constant': ((0.0, 2.0), "float", 0),
-    'nearby_onto_halite_move_constant': ((0.0, 4.0), "float", 0),
-    'nearby_ships_move_constant': ((0.0, 0.05), "float", 0),
+    'halite_collect_constant': ((0.0, 50.0), "float", 0),
+    'nearby_halite_move_constant': ((0.0, 30.0), "float", 0),
+    'nearby_onto_halite_move_constant': ((0.0, 20.0), "float", 0),
+    'nearby_ships_move_constant': ((0.0, 1.0), "float", 0),
     'nearby_base_move_constant': ((0.0, 20.0), "float", 0),
-    'nearby_move_onto_base_constant': ((0.0, 10.0), "float", 0),
-    'halite_dropoff_constant': ((0.0, 30.0), "float", 0),
+    'nearby_move_onto_base_constant': ((0.0, 50.0), "float", 0),
+    'adjacent_opponent_ships_move_constant': ((0.0, 20.0), "float", 0),
     
     'max_spawns_per_step': ((1, 10), "int", 1),
     'nearby_ship_halite_spawn_constant': ((0.0, 2.0), "float", 0),
-    'nearby_halite_spawn_constant': ((0.0, 2.0), "float", 0),
-    'remaining_budget_spawn_constant': ((0.005, 0.02), "float", 0),
+    'nearby_halite_spawn_constant': ((0.0, 20.0), "float", 0),
+    'remaining_budget_spawn_constant': ((0.002, 0.1), "float", 0),
     'spawn_score_threshold': ((0.0, 40.0), "float", -float("inf")),
     }
   }
+CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"
 
 def main_rule_utils(config):
   rule_utils.store_config_on_first_run(config)
@@ -79,20 +80,22 @@ def main_rule_utils(config):
         config['pool_name'])
       if os.path.exists(fixed_pool_experience_path):
         print('\nBayesian fit to earlier experiments')
-        iteration_config_rewards = pd.read_csv(fixed_pool_experience_path)
-        target_scores = np.reshape(-iteration_config_rewards[
-          'episode_reward'].values, [-1, fixed_opp_repeats]).mean(1).tolist()
-        target_rows = np.arange(len(target_scores))*fixed_opp_repeats
-        suggested_t = [iteration_config_rewards[k].values[
-          target_rows].tolist() for k in config_keys]
-        suggested_t = rule_utils.clip_ranges(suggested_t, opt_range)
-        suggested = list(map(list, zip(*suggested_t)))
-        opt_output = opt.tell(suggested, target_scores)
-        # import pdb; pdb.set_trace()
-        # print(opt_output.x, opt_output.fun)
+        this_folder = os.path.dirname(__file__)
+        agents_folder = os.path.join(
+          this_folder, '../Rule agents/' + config['pool_name'])
+        config_settings_path = os.path.join(
+          agents_folder, CONFIG_SETTINGS_EXTENSION)
+        if os.path.exists(config_settings_path):
+          config_results = pd.read_csv(config_settings_path)
+          suggested = config_results.iloc[:, :-1].values.tolist()
+          target_scores = (-config_results.iloc[:, -1].values).tolist()
+          opt.tell(suggested, target_scores)
+          # import pdb; pdb.set_trace()
+          # print(opt.get_result().x, opt.get_result().fun) # WRONG!
         
     next_fixed_opponent_suggested = None
     iteration_config_rewards = None
+    experience_features_rewards_path = None
   
   while True:
     # Section 1: play games against agents of N previous pools
@@ -133,6 +136,17 @@ def main_rule_utils(config):
         target_scores = np.reshape(-iteration_config_rewards[
           'episode_reward'].values, [-1, fixed_opp_repeats]).mean(1).tolist()
         opt.tell(next_fixed_opponent_suggested, target_scores)
+        
+        # Append the tried settings to the settings-scores file
+        config_rewards = rule_utils.append_config_scores(
+          next_fixed_opponent_suggested, target_scores, config_keys,
+          config['pool_name'], CONFIG_SETTINGS_EXTENSION)
+        
+        # Update the plot of the tried settings and obtained scores
+        rule_utils.plot_reward_versus_features(
+          experience_features_rewards_path, config_rewards,
+          target_col="Average win rate", include_all_targets=True,
+          plot_name_suffix="config setting average win rate", all_scatter=True)
       
       # Select the next hyperparameters to try
       next_fixed_opponent_suggested, next_fixed_opponent_configs = (
@@ -160,7 +174,7 @@ def main_rule_utils(config):
            )
          )
       # experience_buffer.add(evaluation_experience)
-    
+         
     # Select the values that will be used to determine if a next iteration file
     # will be created
     serialized_raw_experience = fixed_opponents_experience if (
@@ -180,10 +194,11 @@ def main_rule_utils(config):
       update_config = {'Time stamp': str(datetime.now())}
       for i in range(len(opponent_rewards)):
         update_config['Reward ' + opponent_rewards[i][2]] = np.round(
-          opponent_rewards[i][1]/opponent_rewards[i][0], 2)
+          opponent_rewards[i][1]/(1e-10+opponent_rewards[i][0]), 2)
       rule_utils.update_learning_progress(config['pool_name'], update_config)
 
-      config_override_agents = fixed_opponents_experience[-1].agent_configs
+      config_override_agents = (
+        fixed_opponents_experience[-1].config_game_agents)
       rule_utils.record_videos(
         rules_config_path, config['num_agents_per_game'],
         extension_override=str(datetime.now())[:19],

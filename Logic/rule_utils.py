@@ -1,6 +1,7 @@
 # import copy
 import json
 from kaggle_environments import make as make_environment
+from kaggle_environments import utils as environment_utils
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -28,7 +29,7 @@ HALITE_MULTIPLIER_CONFIG_ENTRIES = [
           "nearby_onto_halite_move_constant",
           "nearby_base_move_constant",
           "nearby_move_onto_base_constant",
-          "halite_dropoff_constant",
+          "adjacent_opponent_ships_move_constant",
           
           "nearby_ship_halite_spawn_constant",
           "nearby_halite_spawn_constant",
@@ -45,6 +46,15 @@ for dim in range(3, 16, 2):
   kernel[manh_distance > dim/2] = 0
   
   GAUSSIAN_2D_KERNELS[dim] = kernel
+  
+FIXED_POOL_AGENT_WEIGHTS = {
+    'Single base no spawns': 1,
+    'Swarm intelligence': 3,
+    'Greedy - many spawns and conversions': 2,
+    'Run yard one ship': 1,
+    'Self play optimum 1': 2,
+    'Stable opponents pool optimum 1': 2
+    }
 
 def get_action_costs():
   costs = utils.get_action_costs().tolist()
@@ -63,7 +73,7 @@ def store_config_on_first_run(config):
   f = os.path.join(agents_folder, 'initial_config.json')
   if not os.path.exists(f):
     with open(f, 'w') as outfile:
-      outfile.write(json.dumps(config))
+      outfile.write(json.dumps(config, indent=4))
       
 def update_learning_progress(experiment_name, data_vals): 
   # Append a line to the learning progress line if the file exists. Otherwise:
@@ -75,16 +85,45 @@ def update_learning_progress(experiment_name, data_vals):
   
   if os.path.exists(progress_path):
     progress = pd.read_csv(progress_path)
-    progress.loc[progress.shape[0]] = data_vals
+    try:
+      progress.loc[progress.shape[0]] = data_vals
+    except:
+      import pdb; pdb.set_trace()
   else:
     progress = pd.DataFrame(data_vals, index=[0])
   
   progress.to_csv(progress_path, index=False)
   
+def append_config_scores(config_settings, scores, config_keys,
+                         experiment_name, save_extension):
+  # Append lines to the config results if the file exists. Otherwise: create it
+  this_folder = os.path.dirname(__file__)
+  agents_folder = os.path.join(
+    this_folder, '../Rule agents/' + experiment_name)
+  settings_path = os.path.join(agents_folder, save_extension)
+  
+  if os.path.exists(settings_path):
+    results = pd.read_csv(settings_path)
+    try:
+      for i in range(len(scores)):
+        results.loc[results.shape[0]] = config_settings[i] + [-scores[i]]
+    except:
+      import pdb; pdb.set_trace()
+  else:
+    results = pd.DataFrame(config_settings, columns=config_keys)
+    results['Average win rate'] = [-s for s in scores]
+  
+  results.to_csv(settings_path, index=False)
+  
+  return results
+  
 def serialize_game_experience_for_learning(
     experience, only_store_first, config_keys):
   # Create a row for each config - result pair
-  list_of_dicts_x = [c for d in experience for c in d.agent_configs]
+  list_of_dicts_x = [c for d in experience for c in d.config_game_agents]
+  default_config = dict(zip(config_keys, [0 for _ in config_keys]))
+  list_of_dicts_x = [c if isinstance(c, dict) else default_config for c in (
+    list_of_dicts_x)]
   dict_of_lists_x = {
     k: [dic[k] for dic in list_of_dicts_x] for k in list_of_dicts_x[0]}
   
@@ -156,7 +195,7 @@ def write_experience_data(experiment_name, data):
 
 def plot_reward_versus_features(
     features_rewards_path, data, plot_name_suffix,
-    target_col="episode_reward"):
+    target_col="episode_reward", include_all_targets=False, all_scatter=False):
   # data = pd.read_csv(features_rewards_path)
   folder, _ = tuple(features_rewards_path.rsplit('/', 1))
   plots_folder = os.path.join(folder, 'Plots')
@@ -175,22 +214,31 @@ def plot_reward_versus_features(
   for i, c in enumerate(other_columns):
     ax = fig.add_subplot(grid_size, grid_size, i+1)
     x_vals = data[c].values
-    if np.abs(x_vals - x_vals.astype(np.int)).mean() < 1e-8:
+    if not all_scatter and np.abs(
+        x_vals - x_vals.astype(np.int)).mean() < 1e-8:
       # Drop data points corresponding with tied results to make the
       # categorical distinction more apparent
-      non_tied_ids = np.where(np.abs(np.mod(targets*3, 1)) < 1e-8)[0]
-      sns.violinplot(x=targets_rounded[non_tied_ids], y=x_vals[non_tied_ids],
-                     ax=ax).set(title=c)
+      if include_all_targets:
+        plot_ids = np.where(np.abs(np.mod(targets*3, 1)) < 1e-8)[0]
+      else:
+        plot_ids = np.ones_like(targets, dtype=np.bool)
+      try:
+        sns.violinplot(x=targets_rounded[plot_ids], y=x_vals[plot_ids],
+                       ax=ax).set(title=c)
+      except:
+        import pdb; pdb.set_trace()
+        x=1
     else:
       sns.regplot(x=x_vals, y=targets, ax=ax).set(title=c)
       
   fig = ax.get_figure()
   fig.savefig(os.path.join(
     plots_folder, 'combined ' + plot_name_suffix + '.png'))
+  plt.clf()
   
 def save_config(config, path):
   with open(path, 'w') as outfile:
-    outfile.write(json.dumps(config))
+    outfile.write(json.dumps(config, indent=4))
     
 # Load all json configs for the given paths
 def load_configs(paths):
@@ -198,6 +246,18 @@ def load_configs(paths):
   for p in paths:
     with open(p) as f:
       configs.append(json.load(f))
+    
+  return configs
+
+# Load all json configs for the given paths
+def load_paths_or_configs(paths):
+  configs = []
+  for p in paths:
+    if p[-5:] == ".json":
+      with open(p) as f:
+        configs.append(json.load(f))
+    else:
+      configs.append(p)
     
   return configs
 
@@ -270,7 +330,7 @@ def smooth2d(grid, smooth_kernel_dim=7, return_kernel=False):
 def decide_ship_convert_actions(
     config, observation, player_obs, env_config, verbose):
   spawn_cost = env_config.spawnCost
-  convert_cost =  env_config.convertCost
+  convert_cost = env_config.convertCost
   remaining_budget = player_obs[0]
   max_conversions = int((
      remaining_budget - config['min_spawns_after_conversions']*spawn_cost)/(
@@ -281,12 +341,17 @@ def decide_ship_convert_actions(
   my_next_ships = observation['rewards_bases_ships'][0][2]
   obs_halite = np.maximum(0, observation['halite'])
   max_conversions = min(max_conversions, int(obs_halite.sum()/4/convert_cost))
+  num_ships = len(player_obs[2])
+
+  # Override the maximum number of conversions on the last episode turn
+  last_episode_turn = observation['relative_step'] == 1
+  if last_episode_turn:
+    max_conversions = num_ships
 
   if max_conversions == 0:
     return ({}, np.array(list(player_obs[2].keys())), my_bases, my_next_ships,
             obs_halite, remaining_budget)
 
-  num_ships = len(player_obs[2])
   conversion_scores = np.zeros(num_ships)
   grid_size = obs_halite.shape[0]
   smoothed_friendly_ship_halite = smooth2d(
@@ -321,6 +386,12 @@ def decide_ship_convert_actions(
     # Add distance adjusted nearby halite to the conversion scores
     conversion_scores[i] += (smoothed_halite[row, col]-obs_halite[row, col])*(
       config['nearby_halite_conversion_constant'])
+    
+    # Convert on the last turn if there is more halite on board than the
+    # conversion cost.
+    if last_episode_turn:
+      conversion_scores[i] += 1e6*np.sign(
+        player_obs[2][ship_k][1]-convert_cost)
     
     if verbose:
       print(player_obs[2][ship_k][1]/config[
@@ -389,7 +460,7 @@ def add_warped_kernel(grid, kernel, row, col):
 def decide_not_converted_ship_actions(
     config, observation, player_obs, env_config, not_converted_ship_keys,
     my_next_bases, my_next_ships, obs_halite, verbose,
-    convert_first_ship_on_None_action=True):
+    convert_first_ship_on_None_action=True, nearby_ship_grid=3):
   ship_actions = {}
   num_ships = len(not_converted_ship_keys)
   halite_deposited = 0
@@ -403,13 +474,16 @@ def decide_not_converted_ship_actions(
   ship_keys_ordered_ids = np.argsort(-ship_halite)
   ship_halite = ship_halite[ship_keys_ordered_ids]
   
-  ships = np.stack([
-    rbs[2] for rbs in observation['rewards_bases_ships']]).sum(0)
+  my_ships = observation['rewards_bases_ships'][0][2].astype(np.int)
+  opponent_ships = np.stack([
+    rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0)
+  halite_ships = np.stack([
+    rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
   
   # Compute values that will be useful in the calculation for all ships
   grid_size = obs_halite.shape[0]
   smoothed_friendly_bases = smooth2d(my_next_bases)
-  smoothed_ships, ships_kernel = smooth2d(ships, return_kernel=True)
+  my_smoothed_ships, ships_kernel = smooth2d(my_ships, return_kernel=True)
   smoothed_halite = smooth2d(obs_halite)
   
   # Select the best option: go to most salient halite, return to base or stay
@@ -421,18 +495,17 @@ def decide_not_converted_ship_actions(
   bad_positions = np.stack([rbs[1] for rbs in observation[
     'rewards_bases_ships']])[1:].sum(0)
   
-  # At the start of the game, halite can not be deposited and should therefore
-  # induce different behavior
-  can_deposit_halite = my_next_bases.sum() > 0 or num_ships > 1
+  # Fixed rule to decide when there should be a focus on collecting halite
+  should_collect_halite = my_next_bases.sum() > 0 or num_ships > 1
   
   for ship_i, ship_k in enumerate(
       not_converted_ship_keys[ship_keys_ordered_ids]):
     row, col = utils.row_col_from_square_grid_pos(
         player_obs[2][ship_k][0], grid_size)
     
-    # Subtract the own influence of the ship from smoothed_ships
-    smoothed_ships = add_warped_kernel(
-      smoothed_ships, -ships_kernel, row, col)
+    # Subtract the own influence of the ship from my_smoothed_ships
+    my_smoothed_ships = add_warped_kernel(
+      my_smoothed_ships, -ships_kernel, row, col)
     
     move_scores = np.zeros(len(MOVE_DIRECTIONS))
     for i, move_dir in enumerate(MOVE_DIRECTIONS):
@@ -443,30 +516,23 @@ def decide_not_converted_ship_actions(
       if bad_positions[new_row, new_col]:
         move_scores[i] -= 1e9
       
-      # TODO: take current ship halite into account - lower value of collecting
-      # When there already is a lot of halite on board
       if move_dir is None:
-        # Collecting halite is good, unless if there is only one ship and no
-        # base
+        # Collecting halite is good, if we have a backup base in case the ship
+        # gets destroyed
         move_scores[i] += config['halite_collect_constant']*max(
-          0, obs_halite[row, col])*can_deposit_halite
+          0, obs_halite[row, col])*should_collect_halite
         
-        # Staying at my base is better, the more halite I have on board
-        move_scores[i] += config['halite_dropoff_constant']*(
-          ship_halite[ship_i])*my_next_bases[new_row, new_col]
-      
       # Going closer to halite is good
       move_scores[i] += config['nearby_halite_move_constant']*(
-        smoothed_halite[new_row, new_col])
+        smoothed_halite[row, col] - smoothed_halite[new_row, new_col])
       
-      # Moving on top of halite is good, unless if there is only one ship and
-      # no base
+      # Moving on top of halite is good, when the collect halite mode is active
       move_scores[i] += config['nearby_onto_halite_move_constant']*(
-        obs_halite[new_row, new_col])*can_deposit_halite
+        obs_halite[new_row, new_col])*should_collect_halite
       
       # Going closer to my other ships is bad
       move_scores[i] -= config['nearby_ships_move_constant']*(
-        smoothed_ships[new_row, new_col])
+        my_smoothed_ships[new_row, new_col])
       
       # Going closer to my bases is good, the more halite I have on the ship
       move_scores[i] += config['nearby_base_move_constant']*(
@@ -477,6 +543,42 @@ def decide_not_converted_ship_actions(
       move_scores[i] += config['nearby_move_onto_base_constant']*(
         my_next_bases[new_row, new_col])*ship_halite[ship_i]
       
+      # Consider nearby enemy ships in a nearby_ship_grid*nearby_ship_grid
+      # from the new position and assign penalty/gain points for possible
+      # collisions / approachments as a function of the halite on board of
+      # other ships
+      for row_increment in range(-nearby_ship_grid, nearby_ship_grid+1):
+        for col_increment in range(-nearby_ship_grid, nearby_ship_grid+1):
+          distance_to_new = np.abs(row_increment) + np.abs(col_increment)
+          if distance_to_new <= nearby_ship_grid:
+            other_row = (new_row + row_increment) % grid_size
+            other_col = (new_col + col_increment) % grid_size
+            if opponent_ships[other_row, other_col]:
+              halite_diff = halite_ships[other_row, other_col] - halite_ships[
+                row, col]
+              if halite_diff == 0:
+                # Equal halite - impose a penalty of half a spawn cost for
+                # moving closer due to the risk of collision
+                dist_kernel = 1/((distance_to_new+1)**2)
+                move_scores[i] -= config[
+                  'adjacent_opponent_ships_move_constant']*(
+                    env_config.spawnCost/2*dist_kernel)
+              elif halite_diff > 0:
+                # I can steal the opponent's halite - moving closer is good,
+                # proportional to the difference in cargo on board.
+                dist_kernel = 1/((distance_to_new+1)**2)
+                move_scores[i] += config[
+                  'adjacent_opponent_ships_move_constant']*(
+                    halite_diff*dist_kernel)
+              else:
+                # I risk losing my halite - moving closer is bad, proportional
+                # to the difference in cargo on board.
+                dist_kernel = 1/((max(0, distance_to_new-1)+1)**2)
+                move_scores[i] += config[
+                  'adjacent_opponent_ships_move_constant']*(
+                    halite_diff*dist_kernel)
+            
+      
       if verbose:
         print(
           ship_k,
@@ -484,15 +586,15 @@ def decide_not_converted_ship_actions(
           config['nearby_halite_move_constant']*(
           smoothed_halite[new_row, new_col]),
           config['nearby_onto_halite_move_constant']*(
-          obs_halite[new_row, new_col])*can_deposit_halite,
+          obs_halite[new_row, new_col])*should_collect_halite,
           config['nearby_ships_move_constant']*(
-          smoothed_ships[new_row, new_col]),
+          my_smoothed_ships[new_row, new_col]),
           config['nearby_base_move_constant']*(
           smoothed_friendly_bases[new_row, new_col])*ship_halite[ship_i],
           config['nearby_move_onto_base_constant']*(
           my_next_bases[new_row, new_col])*ship_halite[ship_i]
           )
-      
+    
     if verbose:
       print("Ship {} move scores: {}".format(ship_k, move_scores))
       
@@ -506,12 +608,12 @@ def decide_not_converted_ship_actions(
     else:
       ship_actions[str(ship_k)] = str(move_dir)
     
-    # Add the updated influence of the moved ship to smoothed_ships
+    # Restore the updated influence of the moved ship to my_smoothed_ships
     if ship_i < (num_ships - 1):
-      smoothed_ships = add_warped_kernel(
-        smoothed_ships, ships_kernel, new_row, new_col)
+      my_smoothed_ships = add_warped_kernel(
+        my_smoothed_ships, ships_kernel, new_row, new_col)
       
-  if not can_deposit_halite and convert_first_ship_on_None_action:
+  if not should_collect_halite and convert_first_ship_on_None_action:
     convert_cost =  env_config.convertCost
     remaining_budget = player_obs[0]
     if num_ships == 1 and remaining_budget >= convert_cost:
@@ -612,7 +714,27 @@ def get_config_actions(config, observation, player_obs, env_config,
   mapped_actions.update(base_actions)
   halite_spent = player_obs[0]-remaining_budget
   
-  return mapped_actions, halite_deposited, halite_spent
+  return mapped_actions, halite_spent
+
+def get_config_or_callable_actions(config_or_callable, observation, player_obs,
+                                   env_observation, env_config, verbose=False):
+  if isinstance(config_or_callable, dict):
+    return get_config_actions(config_or_callable, observation, player_obs,
+                              env_config, verbose)
+  else:
+    mapped_actions = config_or_callable(env_observation, env_config)
+    
+    # Infer the amount of halite_spent from the actions
+    spawn_cost = env_config.spawnCost
+    convert_cost = env_config.convertCost
+    halite_spent = 0
+    for k in mapped_actions:
+      if mapped_actions[k] == SPAWN:
+        halite_spent += spawn_cost
+      elif mapped_actions[k] == CONVERT:
+        halite_spent += convert_cost
+    
+    return mapped_actions, halite_spent
 
 def get_next_config_settings(
     opt, config_keys, num_games, num_repeat_first_configs):
@@ -633,22 +755,46 @@ def suggested_to_config(suggested, config_keys):
       
   return config
 
+def sample_from_config_or_path(config_or_path, return_callable):
+  if isinstance(config_or_path, str):
+    agent_file = environment_utils.read_file(config_or_path)
+    if return_callable:
+      return environment_utils.get_last_callable(agent_file)
+    else:
+      return agent_file
+  else:
+    return sample_from_config(config_or_path)
+
 def sample_from_config(config):
+  if not isinstance(config[list(config.keys())[0]], list):
+    # The config is already sampled from - just return the original config
+    return config
+  
   sampled_config = {}
   for k in config:
-    if config[k][1] == "float":
-      sampled_config[k] = np.random.uniform(config[k][0][0], config[k][0][1])
-    elif config[k][1] == "int":
-      sampled_config[k] = np.random.randint(
-        np.floor(config[k][0][0]), np.ceil(config[k][0][1]))
+    if config[k][0][0] == config[k][0][1]:
+      sampled_config[k] = config[k][0][0]
     else:
-      raise ValueError("Unsupported sampling type '{}'".format(config[k][1]))
+      if config[k][1] == "float":
+        sampled_config[k] = np.random.uniform(config[k][0][0], config[k][0][1])
+      elif config[k][1] == "int":
+        sampled_config[k] = np.random.randint(
+          np.floor(config[k][0][0]), np.ceil(config[k][0][1]))
+      else:
+        raise ValueError("Unsupported sampling type '{}'".format(config[k][1]))
   
   for k in config:
     if k in HALITE_MULTIPLIER_CONFIG_ENTRIES:
       sampled_config[k] /= sampled_config['halite_config_setting_divisor']
   
   return sampled_config
+
+def fixed_pool_sample_probs(opponent_names):
+  sample_probs = np.zeros(len(opponent_names))
+  for i, n in enumerate(opponent_names):
+    sample_probs[i] = FIXED_POOL_AGENT_WEIGHTS[n]
+    
+  return sample_probs/sample_probs.sum()
 
 def record_videos(agent_path, num_agents_per_game, extension_override=None,
                   config_override_agents=None):
@@ -665,9 +811,9 @@ def record_videos(agent_path, num_agents_per_game, extension_override=None,
       env_configuration, observation, active_id)
     player_obs = observation.players[active_id]
     
-    mapped_actions, _, _ = get_config_actions(
-      config, current_observation, player_obs, env_configuration)
-       
+    mapped_actions, _ = get_config_or_callable_actions(
+      config, current_observation, player_obs, observation, env_configuration)
+    
     return mapped_actions
   
   if config_override_agents is None:
@@ -675,7 +821,8 @@ def record_videos(agent_path, num_agents_per_game, extension_override=None,
     for i in range(num_agents_per_game):
       AGENT_CONFIGS.append(sample_from_config(config))
   else:
-    AGENT_CONFIGS = config_override_agents
+    AGENT_CONFIGS = [sample_from_config_or_path(
+      p, return_callable=True) for p in config_override_agents]
   
   # For some reason this needs to be verbose - list comprehension breaks the
   # stochasticity of the agents.
@@ -692,6 +839,10 @@ def record_videos(agent_path, num_agents_per_game, extension_override=None,
       config_id_agents[0]] + ["random"]*(num_agents_per_game-1)
     
     env.run(agents)
+    
+    if config_override_agents is not None and video_type == "self play":
+      video_type = "; ".join([
+        a.rsplit('/', 1)[-1][:-3] for a in config_override_agents[1:]])
     
     # Save the HTML recording in the videos folder
     game_recording = env.render(mode="html", width=800, height=600)

@@ -14,7 +14,7 @@ from pathlib import Path
 # Execution time scales linearly with the number of evaluation games and is
 # independent of the number of agents in the pool.
 num_agents_per_game = 4
-num_games = 10
+num_games = 100
 use_multiprocessing = True
 generate_pair_videos = True
 generate_self_play_videos = True

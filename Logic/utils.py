@@ -121,7 +121,7 @@ def structured_env_obs(env_configuration, env_observation, active_id):
   
   num_episode_steps = env_configuration.episodeSteps
   step = env_observation.step
-  relative_step = step/num_episode_steps
+  relative_step = step/(num_episode_steps-2)
   
   num_agents = len(env_observation.players)
   rewards_bases_ships = []
