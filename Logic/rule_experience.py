@@ -238,9 +238,8 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
         )
   
   episode_duration = time.time() - episode_start_time
-    
+  
   return (this_game_data, episode_duration)
-
 
 # Collect experience by playing games of the most recent agent against other
 # agents in the pool.

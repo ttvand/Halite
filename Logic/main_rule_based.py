@@ -13,7 +13,7 @@ import random
 np.random.seed(0)
 random.seed(0)
 
-NUM_GAMES = 20
+NUM_GAMES = 100
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -24,7 +24,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': False,
+  'use_multiprocessing': True,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
@@ -35,30 +35,29 @@ config = {
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
   'initial_config_ranges':{
-    'halite_config_setting_divisor': ((1000.0, 20000.0), "float", 0),
-    'max_ship_to_base_ratio': ((4.0, 12.0), "float", 0),
+    'halite_config_setting_divisor': ((1.0, 1.0+1e-10), "float", 0),
     
     'min_spawns_after_conversions': ((0, 3), "int", 0),
-    'max_conversions_per_step': ((1, 4), "int", 1),
-    'ship_halite_cargo_conversion_bonus_constant': ((0.0, 20.0), "float", 0),
-    'friendly_ship_halite_conversion_constant': ((0.0, 2.0), "float", 0),
-    'friendly_bases_conversion_constant': ((5.0, 200.0), "float", 0),
-    'nearby_halite_conversion_constant': ((0.0, 2.0), "float", 0),
-    'conversion_score_threshold': ((0.0, 30.0), "float", -float("inf")),
+    'collect_smoothed_multiplier': ((0.0, 1.0), "float", 0),
+    'collect_actual_multiplier': ((0.0, 10.0), "float", 0),
+    'return_base_multiplier': ((0.0, 5.0), "float", 0),
+    'establish_base_smoothed_multiplier': ((0.0, 1.0), "float", 0),
+    'establish_base_deposit_multiplier': ((0.0, 1.0), "float", 0),
+    'collect_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
+    'return_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
+    'establish_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
+    'collect_catch_enemy_multiplier': ((0.0, 5.0), "float", 0),
+    'return_base_catch_enemy_multiplier': ((0.0, 5.0), "float", 0),
+    'establish_base_catch_enemy_multiplier': ((0.0, 5.0), "float", 0),
+    'ignore_catch_prob': ((0.1, 0.5), "float", 0),
     
-    'halite_collect_constant': ((0.0, 50.0), "float", 0),
-    'nearby_halite_move_constant': ((0.0, 30.0), "float", 0),
-    'nearby_onto_halite_move_constant': ((0.0, 20.0), "float", 0),
-    'nearby_ships_move_constant': ((0.0, 1.0), "float", 0),
-    'nearby_base_move_constant': ((0.0, 20.0), "float", 0),
-    'nearby_move_onto_base_constant': ((0.0, 50.0), "float", 0),
-    'adjacent_opponent_ships_move_constant': ((0.0, 20.0), "float", 0),
-    
-    'max_spawns_per_step': ((1, 10), "int", 1),
+    'max_ships': ((10, 20), "int", 1),
+    'max_spawns_per_step': ((1, 5), "int", 1),
     'nearby_ship_halite_spawn_constant': ((0.0, 2.0), "float", 0),
     'nearby_halite_spawn_constant': ((0.0, 20.0), "float", 0),
     'remaining_budget_spawn_constant': ((0.002, 0.1), "float", 0),
     'spawn_score_threshold': ((0.0, 40.0), "float", -float("inf")),
+    'max_spawn_relative_step_divisor': ((1.0, 30.0), "float", 1),
     }
   }
 CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"
