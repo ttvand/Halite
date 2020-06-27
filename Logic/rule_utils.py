@@ -51,12 +51,14 @@ for dim in range(3, 16, 2):
   GAUSSIAN_2D_KERNELS[dim] = kernel
   
 FIXED_POOL_AGENT_WEIGHTS = {
-    'Single base no spawns': 1,
+    # 'Single base no spawns': 1,
     'Swarm intelligence': 3,
-    'Greedy - many spawns and conversions': 2,
-    'Run yard one ship': 1,
-    'Self play optimum 1': 2,
-    'Stable opponents pool optimum 1': 2
+    'Stochastic swarm intelligence': 3,
+    'Self play rule_actions_v2 optimum 1': 2,
+    # 'Greedy - many spawns and conversions': 2,
+    # 'Run yard one ship': 1,
+    # 'Self play optimum 1': 2,
+    # 'Stable opponents pool optimum 1': 2
     }
 
 def get_action_costs():
@@ -91,6 +93,8 @@ def update_learning_progress(experiment_name, data_vals):
     try:
       progress.loc[progress.shape[0]] = data_vals
     except:
+      # This can happen if the stable opponents pool changes throughout a
+      # single agent pool iteration.
       import pdb; pdb.set_trace()
   else:
     progress = pd.DataFrame(data_vals, index=[0])

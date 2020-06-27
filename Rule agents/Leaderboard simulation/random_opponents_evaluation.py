@@ -24,12 +24,12 @@ generate_self_play_videos = True
 this_folder = os.path.dirname(__file__)
 agents_folder = os.path.join(this_folder, 'Agents')
 agent_extensions = np.array(
-  [f for f in os.listdir(agents_folder) if f[-3:]=='.py'])
+  [f for f in os.listdir(agents_folder) if f[-3:] == '.py'])
 num_agents = len(agent_extensions)
 agent_full_paths = [os.path.join(agents_folder, e) for e in agent_extensions]
 
-# Simulate games, reloading the file on each interaction since some agents
-# are stochastic
+# Simulate games, reloading the file on each interaction since agents can be
+# stochastic
 scrambled_agent_ids = np.random.permutation(num_games*num_agents_per_game)
 agent_ids = np.mod(scrambled_agent_ids, num_agents).reshape([num_games, -1])
 

@@ -270,8 +270,8 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     other_ids = []
     for i, p in enumerate(other_sample_probs):
       other_ids += [i for _ in range(int(np.ceil(num_other_agents*p)))]
-    other_sample_ids = np.random.permutation(
-      other_ids[:num_other_agents]).reshape((num_games, -1))
+    other_sample_ids = np.random.permutation(other_ids)[
+      :num_other_agents].reshape((num_games, -1))
   else:
     other_sample_ids = [None for _ in range(num_games)]
   

@@ -1,3 +1,4 @@
+import numpy as np
 import random
 
 #FUNCTIONS###################################################
@@ -93,7 +94,7 @@ def boarding(x_initial, y_initial, ship_id, actions, s_env, ship_index):
                 direction_x = x
                 direction_y = y
     # if hostile ship is there, has enough halite and safe for boarding
-    if biggest_prize != None:
+    if biggest_prize != None and np.random.uniform() < chase_probability:
         actions[ship_id] = direction
         s_env["map"][x_initial][y_initial]["ship"] = None
         s_env["map"][direction_x][direction_y]["ship_cargo"] = -1
@@ -313,6 +314,8 @@ movement_tactics_index = 0
 low_amount_of_halite = 50
 # limit of ships to spawn
 spawn_limit = 10
+# TOM ADDED: probability of chasing a nearby ship with more halite
+chase_probability = 1.0
 # not all global variables are defined
 globals_not_defined = True
 
@@ -368,4 +371,8 @@ def swarm_agent(observation, configuration):
     s_env = adapt_environment(observation, configuration)
     actions = actions_of_ships(s_env)
     actions = actions_of_shipyards(actions, s_env)
+
+    if observation.step == 0:
+        actions = {list(observation.players[observation.player][2].keys())[0]: "CONVERT"}
+
     return actions

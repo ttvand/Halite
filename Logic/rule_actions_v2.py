@@ -230,7 +230,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     
     ship_scores = all_ship_scores[ship_k]
     ship_halite = player_obs[2][ship_k][1]
-    convert_surrounded_ship = ship_scores[4] and ship_halite >= convert_cost/2
+    convert_surrounded_ship = ship_scores[4] and (
+      ship_halite >= (convert_cost/2))
     if ship_scores[2].max() >= max(ship_scores[0].max()*can_deposit_halite,
                                    ship_scores[1].max()) or (
                                      convert_surrounded_ship):
@@ -479,7 +480,8 @@ def decide_existing_base_spawns(
       
   return mapped_actions, remaining_budget
 
-def get_config_actions(config, observation, player_obs, env_config, verbose):
+def get_config_actions(config, observation, player_obs, env_config,
+                       verbose=False):
   # Compute the ship scores for all high level actions
   ship_scores = get_ship_scores(config, observation, player_obs, env_config,
                                 verbose)
