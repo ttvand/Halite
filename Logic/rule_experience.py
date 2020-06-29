@@ -200,7 +200,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
           rule_utils.get_config_or_callable_actions(
             game_agents[active_id], current_observation, player_obs,
             env_observation, env.configuration))
-        ship_counts[active_id, current_observation['step']] len(player_obs[2])
+        ship_counts[current_observation['step'], active_id] = len(player_obs[2])
         if active_id == 0:
           first_agent_step_details.append(step_details)
           first_agent_ship_counts[current_observation['step']] = len(
