@@ -182,6 +182,9 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
   
   # Take actions until the game is terminated
   episode_step = 0
+  first_agent_step_details = []
+  first_agent_ship_counts = np.zeros(max_episode_steps-1)
+  ship_counts = np.full((max_episode_steps, num_agents), np.nan)
   while not env.done:
     env_observation = env.state[0].observation
     player_mapped_actions = []
@@ -193,10 +196,15 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
         player_obs = env.state[0].observation.players[active_id]
         env_observation.player = active_id
         step_start_time = time.time()
-        mapped_actions, halite_spent = (
+        mapped_actions, halite_spent, step_details = (
           rule_utils.get_config_or_callable_actions(
             game_agents[active_id], current_observation, player_obs,
             env_observation, env.configuration))
+        ship_counts[active_id, current_observation['step']] len(player_obs[2])
+        if active_id == 0:
+          first_agent_step_details.append(step_details)
+          first_agent_ship_counts[current_observation['step']] = len(
+            player_obs[2])
         step_delay = time.time() - step_start_time
         action_delays[episode_step, active_id] = step_delay
         total_halite_spent[active_id] += halite_spent
@@ -216,6 +224,10 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
       halite_scores[episode_step+1, i] = halite_score
     
     episode_step += 1
+    
+  # # Evaluate when and why the first agent lost ships
+  # import pdb; pdb.set_trace()
+  # x = 1
     
   # Obtain the terminal rewards for all agents
   halite_scores = halite_scores[:episode_step]

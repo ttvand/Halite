@@ -381,16 +381,14 @@ def get_config_or_callable_actions(config_or_callable, observation, player_obs,
     mapped_actions = config_or_callable(env_observation, env_config)
     
     # Infer the amount of halite_spent from the actions
-    spawn_cost = env_config.spawnCost
-    convert_cost = env_config.convertCost
     halite_spent = 0
     for k in mapped_actions:
       if mapped_actions[k] == SPAWN:
-        halite_spent += spawn_cost
+        halite_spent += env_config.spawnCost
       elif mapped_actions[k] == CONVERT:
-        halite_spent += convert_cost
+        halite_spent += env_config.convertCost
     
-    return mapped_actions, halite_spent
+    return mapped_actions, halite_spent, None
 
 def get_next_config_settings(
     opt, config_keys, num_games, num_repeat_first_configs, config_ranges):
@@ -471,7 +469,7 @@ def record_videos(agent_path, num_agents_per_game, extension_override=None,
       env_configuration, observation, active_id)
     player_obs = observation.players[active_id]
     
-    mapped_actions, _ = get_config_or_callable_actions(
+    mapped_actions, _, _ = get_config_or_callable_actions(
       config, current_observation, player_obs, observation, env_configuration)
     
     return mapped_actions
