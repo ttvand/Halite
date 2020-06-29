@@ -55,6 +55,10 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Swarm intelligence': 3,
     'Stochastic swarm intelligence': 3,
     'Self play rule_actions_v2 optimum 1': 2,
+    'Self play rule_actions_v2 optimum 2': 2,
+    'Self play rule_actions_v2 optimum 2 additional rules 3': 2,
+    'Self play rule_actions_v2 optimum 2 additional rules 3 stochastic': 3,
+    'Self play rule_actions_v2 optimum 3': 2,
     # 'Greedy - many spawns and conversions': 2,
     # 'Run yard one ship': 1,
     # 'Self play optimum 1': 2,
@@ -388,11 +392,15 @@ def get_config_or_callable_actions(config_or_callable, observation, player_obs,
     return mapped_actions, halite_spent
 
 def get_next_config_settings(
-    opt, config_keys, num_games, num_repeat_first_configs):
+    opt, config_keys, num_games, num_repeat_first_configs, config_ranges):
   num_suggested = int(np.ceil(num_games/num_repeat_first_configs))
-  suggested = opt.ask(num_suggested)
-  
-  suggested_configs = [suggested_to_config(s, config_keys) for s in suggested]
+  if opt is None:
+    suggested = [[config_ranges[k] for k in config_keys] for _ in range(
+      num_suggested)]
+    suggested_configs = [config_ranges for _ in range(num_suggested)]
+  else:
+    suggested = opt.ask(num_suggested)
+    suggested_configs = [suggested_to_config(s, config_keys) for s in suggested]
   
   return suggested, suggested_configs
 

@@ -16,6 +16,7 @@ ExperienceGame = recordtype('ExperienceGame', [
   'initial_halite_setup',
   'initial_agents_setup',
   'halite_scores',
+  'action_delays',
   'num_episode_steps',
   'episode_rewards',
   'terminal_num_bases',
@@ -168,6 +169,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
   env.reset(num_agents=num_agents)
   max_episode_steps = env.configuration.episodeSteps
   halite_scores = np.full((max_episode_steps, num_agents), np.nan)
+  action_delays = np.full((max_episode_steps-1, num_agents), np.nan)
   halite_scores[0] = env.state[0].observation.players[0][0]
   total_halite_spent = np.zeros(num_agents).tolist()
   
@@ -190,10 +192,13 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
           env.configuration, env_observation, active_id)
         player_obs = env.state[0].observation.players[active_id]
         env_observation.player = active_id
+        step_start_time = time.time()
         mapped_actions, halite_spent = (
           rule_utils.get_config_or_callable_actions(
             game_agents[active_id], current_observation, player_obs,
             env_observation, env.configuration))
+        step_delay = time.time() - step_start_time
+        action_delays[episode_step, active_id] = step_delay
         total_halite_spent[active_id] += halite_spent
         if verbose:
           print("Player {} obs: {}".format(active_id, player_obs))
@@ -228,6 +233,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
         initial_halite_setup,
         initial_agents_setup,
         halite_scores,
+        action_delays,
         episode_step,
         episode_rewards,
         terminal_num_bases,

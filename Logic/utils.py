@@ -140,6 +140,7 @@ def structured_env_obs(env_configuration, env_observation, active_id):
     'halite': halite,
     'relative_step': relative_step,
     'rewards_bases_ships': rewards_bases_ships,
+    'step': step,
     }
   
 

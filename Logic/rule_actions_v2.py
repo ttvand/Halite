@@ -9,6 +9,7 @@ MOVE_DIRECTIONS = [None, "NORTH", "SOUTH", "EAST", "WEST"]
 DISTANCE_MASKS = {}
 HALF_PLANES_CATCH = {}
 HALF_PLANES_RUN = {}
+ROW_COL_DISTANCE_MASKS = {}
 DISTANCE_MASK_DIM = 21
 half_distance_mask_dim = int(DISTANCE_MASK_DIM/2)
 for row in range(DISTANCE_MASK_DIM):
@@ -70,6 +71,9 @@ for row in range(DISTANCE_MASK_DIM):
     HALF_PLANES_CATCH[(row, col)] = catch_distance_masks
     HALF_PLANES_RUN[(row, col)] = run_distance_masks
     
+    for d in range(1, DISTANCE_MASK_DIM):
+      ROW_COL_DISTANCE_MASKS[(row, col, d)] = manh_distance == d
+    
 def update_scores_enemy_ships(
     config, collect_grid_scores, return_to_base_scores, establish_base_scores,
     opponent_ships, halite_ships, row, col, grid_size, spawn_cost, min_dist=2):
@@ -117,6 +121,12 @@ def update_scores_enemy_ships(
         mask_collect_return = HALF_PLANES_RUN[(row, col)][direction]
         if halite_diff_dist[1] == 1:
           mask_collect_return[row, col] = True
+          
+        # I can still mine halite at the current square if the opponent ship is
+        # >1 moves away
+        if halite_diff_dist[1] > 1:
+          mask_collect_return[row, col] = False
+          
         collect_grid_scores -= mask_collect_return*(ship_halite+spawn_cost)*(
           config['collect_run_enemy_multiplier'])*distance_multiplier
         return_to_base_scores -= mask_collect_return*(ship_halite+spawn_cost)*(
@@ -147,13 +157,61 @@ def update_scores_enemy_ships(
   return (collect_grid_scores, return_to_base_scores, establish_base_scores,
           preferred_directions, len(bad_directions) == 4)
 
+def set_scores_single_nearby_zero(scores, nearby, size):
+  nearby_pos = np.where(nearby)
+  row = nearby_pos[0][0]
+  col = nearby_pos[1][0]
+  
+  for i in range(-1, 2):
+    near_row = (row + i) % size
+    for j in range(-1, 2):
+      if i!=0 or j!=0:
+        near_col = (col + j) % size
+        scores[near_row, near_col] = 0
+  
+  return scores
+
+def grid_distance(r1, c1, r2, c2, size):
+  horiz_diff = c2-c1
+  horiz_distance = min(np.abs(horiz_diff),
+    min(np.abs(horiz_diff-size), np.abs(horiz_diff+size)))
+  vert_diff = r2-r1
+  vert_distance = min(np.abs(vert_diff),
+    min(np.abs(vert_diff-size), np.abs(vert_diff+size)))
+  
+  return horiz_distance+vert_distance
+
+def override_early_return_base_scores(
+    return_to_base_scores, my_bases, ship_row, ship_col, size, num_ships):
+  base_pos = np.where(my_bases)
+  base_row = base_pos[0][0]
+  base_col = base_pos[1][0]
+  
+  dist_to_base = grid_distance(base_row, base_col, ship_row, ship_col, size)
+  if dist_to_base <= 9-num_ships:
+    return_to_base_scores[base_row, base_col] = 0
+    
+  return return_to_base_scores
+
 
 def get_ship_scores(config, observation, player_obs, env_config, verbose):
   convert_cost = env_config.convertCost
   spawn_cost = env_config.spawnCost
   my_bases = observation['rewards_bases_ships'][0][1]
   obs_halite = np.maximum(0, observation['halite'])
-
+  num_ships = len(player_obs[2])
+  first_base = num_ships == 1 and my_bases.sum() == 0
+  max_ships = config['max_ships']
+  early_game_return_boost_step = config['early_game_return_boost_step']
+  step = observation['step']
+  early_game_not_max_ships = (num_ships < max_ships) and (
+    step < early_game_return_boost_step)
+  early_game_return_boost = (early_game_return_boost_step-step)/(
+    early_game_return_boost_step)*config[
+      'early_game_return_base_additional_multiplier']*early_game_not_max_ships
+  end_game_return_boost = (step > env_config['episodeSteps']*0.97)*config[
+    'end_game_return_base_additional_multiplier']
+      
   # Override the maximum number of conversions on the last episode turn
   last_episode_turn = observation['relative_step'] == 1
 
@@ -181,15 +239,32 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
       smoothed_halite * config['collect_smoothed_multiplier'] + 
       obs_halite * config['collect_actual_multiplier'])
     
+    # Override the collect score to 0 to avoid blocking the base early on in
+    # the game: All squares right next to the initial base are set to 0
+    if observation['rewards_bases_ships'][0][0] >= spawn_cost and (
+        observation['step'] < 20) and my_bases.sum() == 1:
+      collect_grid_scores = set_scores_single_nearby_zero(
+        collect_grid_scores, my_bases, grid_size)
+    
     # Scores 2: returning to any of my bases
     return_to_base_scores = my_bases*dm*ship_halite*(
-      config['return_base_multiplier'])
+      config['return_base_multiplier'] + early_game_return_boost + (
+        end_game_return_boost))
+    
+    # Override the return base score to 0 to avoid blocking the base early on
+    # in the game.
+    if observation['rewards_bases_ships'][0][0] >= spawn_cost and (
+        observation['step'] < 20) and my_bases.sum() == 1 and num_ships < 9:
+      return_to_base_scores = override_early_return_base_scores(
+        return_to_base_scores, my_bases, row, col, grid_size, num_ships)
     
     # Scores 3: establish a new base
     establish_base_scores = dm*(
-      smoothed_halite-obs_halite) * config[
-        'establish_base_smoothed_multiplier']*(1-((my_bases*dm).max()))*(
-          1-my_bases) - (convert_cost*can_deposit_halite) + ship_halite*(
+      smoothed_halite-obs_halite) * (config[
+        'establish_base_smoothed_multiplier'] + first_base*config[
+          'establish_first_base_smoothed_multiplier_correction'])*(
+            1-((my_bases*dm).max()))*(1-my_bases) - (
+              convert_cost*can_deposit_halite) + ship_halite*(
             config['establish_base_deposit_multiplier'])
             
     # Update the scores as a function of nearby enemy ships to avoid collisions
@@ -231,7 +306,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     ship_scores = all_ship_scores[ship_k]
     ship_halite = player_obs[2][ship_k][1]
     convert_surrounded_ship = ship_scores[4] and (
-      ship_halite >= (convert_cost/2))
+      ship_halite >= (convert_cost/2)) and (
+        ship_halite + player_obs[0] >= convert_cost)
     if ship_scores[2].max() >= max(ship_scores[0].max()*can_deposit_halite,
                                    ship_scores[1].max()) or (
                                      convert_surrounded_ship):
@@ -264,6 +340,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     
   ship_order = np.argsort(-ship_best_scores)
   occupied_target_squares = []
+  return_base_distances = []
   for i in range(num_ships):
     ship_k = ship_ids[ship_order[i]]
     if not ship_k in ship_plans:
@@ -274,6 +351,10 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
       for (r, c) in occupied_target_squares:
         ship_scores[0][r, c] = 0
         ship_scores[2][r, c] = 0
+        
+      for (r, c, d) in return_base_distances:
+        if grid_distance(r, c, row, col, grid_size) == d:
+          ship_scores[1][r, c] = 0
       
       best_collect_score = ship_scores[0].max()
       best_return_score = ship_scores[1].max()
@@ -300,6 +381,9 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         target_row = target_return[0][0]
         target_col = target_return[1][0]
         ship_plans[ship_k] = (target_row, target_col, ship_scores[3])
+        base_distance = grid_distance(target_row, target_col, row, col,
+                                      grid_size)
+        return_base_distances.append((target_row, target_col, base_distance))
       else:
         # Establish base mode
         target_base = np.where(ship_scores[2] == ship_scores[2].max())
@@ -348,6 +432,7 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
   obs_halite = np.maximum(0, observation['halite'])
   grid_size = obs_halite.shape[0]
   my_next_ships = np.zeros((grid_size, grid_size), dtype=np.bool)
+  updated_ship_pos = {}
   
   # List all positions you definitely don't want to move to. Initially this
   # only contains enemy bases and eventually also earlier ships.
@@ -400,14 +485,16 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
         row, col, action, grid_size)
       my_next_ships[new_row, new_col] = 1
       bad_positions[new_row, new_col] = 1
+      updated_ship_pos[ship_k] = (new_row, new_col)
       if action is not None:
         ship_actions[ship_k] = action
   
-  return ship_actions, remaining_budget, my_next_ships, obs_halite
+  return (ship_actions, remaining_budget, my_next_ships, obs_halite,
+          updated_ship_pos)
 
 def decide_existing_base_spawns(
     config, observation, player_obs, my_next_bases, my_next_ships, obs_halite,
-    env_config, remaining_budget, verbose):
+    env_config, remaining_budget, verbose, ship_plans, updated_ship_pos):
 
   spawn_cost = env_config.spawnCost
   num_ships = my_next_ships.sum()
@@ -441,6 +528,16 @@ def decide_existing_base_spawns(
     
     # Don't spawn when there will be a ship at the base
     spawn_scores[i] -= 1e9*my_next_ships[row, col]
+    
+    # Don't spawn when there is a returning ship that wants to enter the base
+    # in two steps
+    for k in ship_plans:
+      if ship_plans[k][0] == row and ship_plans[k][1] == col:
+        updated_distance = grid_distance(row, col, updated_ship_pos[k][0],
+                                         updated_ship_pos[k][1], grid_size)
+        if updated_distance == 1:
+          spawn_scores[i] -= 1e6
+          break
     
     # Spawn less when the base is crowded with ships with a lot of halite
     # TODO: use the updated ship halite
@@ -491,14 +588,16 @@ def get_config_actions(config, observation, player_obs, env_config,
     config, observation, player_obs, env_config, verbose, ship_scores)
   
   # Translate the ship high level plans to basic move/convert actions
-  mapped_actions, remaining_budget, my_next_ships, my_next_halite = (
-    map_ship_plans_to_actions(config, observation, player_obs, env_config,
-                              verbose, ship_scores, ship_plans))
+  (mapped_actions, remaining_budget, my_next_ships, my_next_halite,
+   updated_ship_pos) = map_ship_plans_to_actions(
+     config, observation, player_obs, env_config, verbose, ship_scores,
+     ship_plans)
   
   # Decide for all bases whether to spawn or keep the base available
   base_actions, remaining_budget = decide_existing_base_spawns(
     config, observation, player_obs, my_next_bases, my_next_ships,
-    my_next_halite, env_config, remaining_budget, verbose)
+    my_next_halite, env_config, remaining_budget, verbose, ship_plans,
+    updated_ship_pos)
   
   mapped_actions.update(base_actions)
   halite_spent = player_obs[0]-remaining_budget

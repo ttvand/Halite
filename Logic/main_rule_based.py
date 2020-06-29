@@ -30,34 +30,72 @@ config = {
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
   
   'num_agents_per_game': 4,
-  'pool_name': 'Rule based with evolution II',
+  'pool_name': 'Rule based with evolution IV',
 
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
+  # 'initial_config_ranges':{
+  #   'halite_config_setting_divisor': ((1.0, 1.0+1e-10), "float", 0),
+  #   'min_spawns_after_conversions': ((0, 2), "int", 0),
+  #   'collect_smoothed_multiplier': ((0.1, 0.5), "float", 0),
+  #   'collect_actual_multiplier': ((3.0, 9.0), "float", 0),
+  #   'return_base_multiplier': ((4.0, 8.0), "float", 0),
+    
+  #   'early_game_return_base_additional_multiplier': ((1.0, 3.0), "float", 0),
+  #   'early_game_return_boost_step': ((50, 150), "int", 0),
+  #   'end_game_return_base_additional_multiplier': ((5.0, 15.0), "float", 0),
+  #   'establish_base_smoothed_multiplier': ((0.0, 0.5), "float", 0),
+  #   'establish_first_base_smoothed_multiplier_correction': ((0.5, 1.5), "float", 0),
+  
+  #   'establish_base_deposit_multiplier': ((0.5, 1.0), "float", 0),
+  #   'collect_run_enemy_multiplier': ((5.0, 15.0), "float", 0),
+  #   'return_base_run_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  #   'establish_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
+  #   'collect_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+    
+  #   'return_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  #   'establish_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  #   'ignore_catch_prob': ((0.3, 0.5), "float", 0),
+  #   'max_ships': ((15, 25), "int", 1),
+  #   'max_spawns_per_step': ((1, 3), "int", 1),
+    
+  #   'nearby_ship_halite_spawn_constant': ((0.5, 3.0), "float", 0),
+  #   'nearby_halite_spawn_constant': ((5.0, 20.0), "float", 0),
+  #   'remaining_budget_spawn_constant': ((0.1, 0.3), "float", 0),
+  #   'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
+  #   'max_spawn_relative_step_divisor': ((50.0, 200.0), "float", 1),
+  #   }
+  
   'initial_config_ranges':{
-    'halite_config_setting_divisor': ((1.0, 1.0+1e-10), "float", 0),
+    'halite_config_setting_divisor': 1.0,
+    'min_spawns_after_conversions': 1,
+    'collect_smoothed_multiplier': 0.2,
+    'collect_actual_multiplier': 6.0,
+    'return_base_multiplier': 6.0,
     
-    'min_spawns_after_conversions': ((0, 3), "int", 0),
-    'collect_smoothed_multiplier': ((0.0, 1.0), "float", 0),
-    'collect_actual_multiplier': ((0.0, 10.0), "float", 0),
-    'return_base_multiplier': ((0.0, 5.0), "float", 0),
-    'establish_base_smoothed_multiplier': ((0.0, 1.0), "float", 0),
-    'establish_base_deposit_multiplier': ((0.0, 1.0), "float", 0),
-    'collect_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
-    'return_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
-    'establish_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
-    'collect_catch_enemy_multiplier': ((0.0, 5.0), "float", 0),
-    'return_base_catch_enemy_multiplier': ((0.0, 5.0), "float", 0),
-    'establish_base_catch_enemy_multiplier': ((0.0, 5.0), "float", 0),
-    'ignore_catch_prob': ((0.1, 0.5), "float", 0),
+    'early_game_return_base_additional_multiplier': 2.0,
+    'early_game_return_boost_step': 100,
+    'end_game_return_base_additional_multiplier': 10.0,
+    'establish_base_smoothed_multiplier': 0.0,
+    'establish_first_base_smoothed_multiplier_correction': 1.0,
     
-    'max_ships': ((10, 20), "int", 1),
-    'max_spawns_per_step': ((1, 5), "int", 1),
-    'nearby_ship_halite_spawn_constant': ((0.0, 2.0), "float", 0),
-    'nearby_halite_spawn_constant': ((0.0, 20.0), "float", 0),
-    'remaining_budget_spawn_constant': ((0.002, 0.1), "float", 0),
-    'spawn_score_threshold': ((0.0, 40.0), "float", -float("inf")),
-    'max_spawn_relative_step_divisor': ((1.0, 30.0), "float", 1),
+    'establish_base_deposit_multiplier': 0.75,
+    'collect_run_enemy_multiplier': 10.0,
+    'return_base_run_enemy_multiplier': 1.0,
+    'establish_base_run_enemy_multiplier': 4.0,
+    'collect_catch_enemy_multiplier': 0.5,
+    
+    'return_base_catch_enemy_multiplier': 0.5,
+    'establish_base_catch_enemy_multiplier': 0.5,
+    'ignore_catch_prob': 0.5,
+    'max_ships': 20,
+    'max_spawns_per_step': 2,
+    
+    'nearby_ship_halite_spawn_constant': 2.0,
+    'nearby_halite_spawn_constant': 10.0,
+    'remaining_budget_spawn_constant': 0.2,
+    'spawn_score_threshold': 50.0,
+    'max_spawn_relative_step_divisor': 100.0,
     }
   }
 CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"
@@ -70,27 +108,33 @@ def main_rule_utils(config):
   fixed_pool_mode = config['play_fixed_pool_only']
   if fixed_pool_mode:
     fixed_opp_repeats = config['fixed_opponents_num_repeat_first_configs']
-    # Prepare the Bayesian optimizer
-    opt_range = [config['initial_config_ranges'][k][0] for k in config_keys]
-    opt = Optimizer(opt_range)
+    config_has_range = isinstance(
+      list(config['initial_config_ranges'].values())[0], tuple)
     
-    if config['play_fixed_pool_fit_prev_data']:
-      fixed_pool_experience_path = rule_utils.get_self_play_experience_path(
-        config['pool_name'])
-      if os.path.exists(fixed_pool_experience_path):
-        print('\nBayesian fit to earlier experiments')
-        this_folder = os.path.dirname(__file__)
-        agents_folder = os.path.join(
-          this_folder, '../Rule agents/' + config['pool_name'])
-        config_settings_path = os.path.join(
-          agents_folder, CONFIG_SETTINGS_EXTENSION)
-        if os.path.exists(config_settings_path):
-          config_results = pd.read_csv(config_settings_path)
-          suggested = config_results.iloc[:, :-1].values.tolist()
-          target_scores = (-config_results.iloc[:, -1].values).tolist()
-          opt.tell(suggested, target_scores)
-          # import pdb; pdb.set_trace()
-          # print(opt.get_result().x, opt.get_result().fun) # WRONG!
+    # Prepare the Bayesian optimizer
+    if config_has_range:
+      opt_range = [config['initial_config_ranges'][k][0] for k in config_keys]
+      opt = Optimizer(opt_range)
+      
+      if config['play_fixed_pool_fit_prev_data']:
+        fixed_pool_experience_path = rule_utils.get_self_play_experience_path(
+          config['pool_name'])
+        if os.path.exists(fixed_pool_experience_path):
+          print('\nBayesian fit to earlier experiments')
+          this_folder = os.path.dirname(__file__)
+          agents_folder = os.path.join(
+            this_folder, '../Rule agents/' + config['pool_name'])
+          config_settings_path = os.path.join(
+            agents_folder, CONFIG_SETTINGS_EXTENSION)
+          if os.path.exists(config_settings_path):
+            config_results = pd.read_csv(config_settings_path)
+            suggested = config_results.iloc[:, :-1].values.tolist()
+            target_scores = (-config_results.iloc[:, -1].values).tolist()
+            opt.tell(suggested, target_scores)
+            # import pdb; pdb.set_trace()
+            # print(opt.get_result().x, opt.get_result().fun) # WRONG!
+    else:
+      opt = None
         
     next_fixed_opponent_suggested = None
     iteration_config_rewards = None
@@ -134,7 +178,8 @@ def main_rule_utils(config):
         # results
         target_scores = np.reshape(-iteration_config_rewards[
           'episode_reward'].values, [-1, fixed_opp_repeats]).mean(1).tolist()
-        opt.tell(next_fixed_opponent_suggested, target_scores)
+        if config_has_range:
+          opt.tell(next_fixed_opponent_suggested, target_scores)
         
         # Append the tried settings to the settings-scores file
         config_rewards = rule_utils.append_config_scores(
@@ -151,7 +196,7 @@ def main_rule_utils(config):
       next_fixed_opponent_suggested, next_fixed_opponent_configs = (
         rule_utils.get_next_config_settings(
           opt, config_keys, config['num_games_fixed_opponents_pool'],
-          fixed_opp_repeats)
+          fixed_opp_repeats, config['initial_config_ranges'])
         )
          
     # Section 3: play games against a fixed opponents pool
