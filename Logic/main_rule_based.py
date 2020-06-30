@@ -13,7 +13,7 @@ import random
 np.random.seed(0)
 random.seed(0)
 
-NUM_GAMES = 100
+NUM_GAMES = 50
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,

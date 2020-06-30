@@ -51,7 +51,7 @@ for dim in range(3, 16, 2):
   GAUSSIAN_2D_KERNELS[dim] = kernel
   
 FIXED_POOL_AGENT_WEIGHTS = {
-    # 'Single base no spawns': 1,
+    'Single base no spawns': 1,
     'Swarm intelligence': 3,
     'Stochastic swarm intelligence': 3,
     'Self play rule_actions_v2 optimum 1': 2,
@@ -60,6 +60,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Self play rule_actions_v2 optimum 2 additional rules 3 stochastic': 3,
     'Self play rule_actions_v2 optimum 3': 2,
     'Self play rule_actions_v2 optimum 3 additional rules 2': 2,
+    'Self play rule_actions_v2 optimum 3 additional rules 3': 2,
     # 'Greedy - many spawns and conversions': 2,
     # 'Run yard one ship': 1,
     # 'Self play optimum 1': 2,

@@ -212,11 +212,11 @@ def update_scores_enemy_ships(
         collect_grid_scores -= mask_collect_return*(ship_halite+spawn_cost)*(
           config['collect_run_enemy_multiplier'])*distance_multiplier
         return_to_base_scores -= mask_collect_return*(ship_halite+spawn_cost)*(
-          config['return_base_run_enemy_multiplier'])*distance_multiplier
+          config['return_base_run_enemy_multiplier'])
         mask_establish = np.copy(mask_collect_return)
         mask_establish[row, col] = False
         establish_base_scores -= mask_establish*(ship_halite+spawn_cost)*(
-          config['establish_base_run_enemy_multiplier'])*distance_multiplier
+          config['establish_base_run_enemy_multiplier'])
         
         bad_directions.append(direction)
       elif halite_diff < 0 and not ignore_catch:
@@ -225,13 +225,13 @@ def update_scores_enemy_ships(
         # one ship in a direction that has less halite, I should avoid it
         distance_multiplier = 1/halite_diff_dist[1]
         mask_collect_return = HALF_PLANES_CATCH[(row, col)][direction]
-        collect_grid_scores -= mask_collect_return*(halite_diff+spawn_cost)*(
+        collect_grid_scores -= mask_collect_return*halite_diff*(
           config['collect_catch_enemy_multiplier'])*distance_multiplier
-        return_to_base_scores -= mask_collect_return*(halite_diff+spawn_cost)*(
+        return_to_base_scores -= mask_collect_return*halite_diff*(
           config['return_base_catch_enemy_multiplier'])*distance_multiplier
         mask_establish = np.copy(mask_collect_return)
         mask_establish[row, col] = False
-        establish_base_scores -= mask_establish*(halite_diff+spawn_cost)*(
+        establish_base_scores -= mask_establish*halite_diff*(
           config['establish_base_catch_enemy_multiplier'])*distance_multiplier
         
         preferred_directions.append(direction)
@@ -347,7 +347,8 @@ def override_early_return_base_scores(
   base_col = base_pos[1][0]
   
   dist_to_base = grid_distance(base_row, base_col, ship_row, ship_col, size)
-  if dist_to_base <= 9-num_ships:
+  # Remember the rule that blocks spawning when a ship is about to return
+  if dist_to_base <= 10-num_ships:
     return_to_base_scores[base_row, base_col] = 0
     
   return return_to_base_scores
@@ -563,7 +564,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         ship_plans[ship_k] = (target_row, target_col, ship_scores[3])
         occupied_target_squares.append((target_row, target_col))
       
-  
   return ship_plans, my_bases
 
 def get_dir_from_target(row, col, target_row, target_col, grid_size):
@@ -619,6 +619,8 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
   grid_size = obs_halite.shape[0]
   num_ships = len(player_obs[2])
   my_next_ships = np.zeros((grid_size, grid_size), dtype=np.bool)
+  halite_ships = np.stack([
+    rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
   updated_ship_pos = {}
   
   # List all positions you definitely don't want to move to. Initially this
@@ -655,11 +657,22 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
   for ship_k in ordered_ship_plans:
     row, col = row_col_from_square_grid_pos(
       player_obs[2][ship_k][0], grid_size)
+    has_selected_action = False
     if isinstance(ship_plans[ship_k], str):
-      ship_actions[ship_k] = ship_plans[ship_k]
-      obs_halite[row, col] = 0
-      remaining_budget -= convert_cost
-    else:
+      if ship_plans[ship_k] == "CONVERT" and (
+          halite_ships[row, col] < convert_cost/4) and (
+            halite_ships[row, col] > 0):
+        # Override the convert logic - it's better to lose some ships than to
+        # convert too much
+        target_row = np.mod(row + np.random.choice([-1, 1]), grid_size)
+        target_col = np.mod(col + np.random.choice([-1, 1]), grid_size)
+        ship_plans[ship_k] = (target_row, target_col, [])
+      else:
+        ship_actions[ship_k] = ship_plans[ship_k]
+        obs_halite[row, col] = 0
+        remaining_budget -= convert_cost
+        has_selected_action = True
+    if not has_selected_action:
       target_row, target_col, preferred_directions = ship_plans[ship_k]
       shortest_actions = get_dir_from_target(row, col, target_row, target_col,
                                              grid_size)
@@ -671,7 +684,7 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
           row, col, a, grid_size)
         if not bad_positions[move_row, move_col]:
           valid_actions.append(a)
-      
+
       if valid_actions:
         if preferred_directions:
           # TODO: figure out if this is actually helpful (it makes the agent
