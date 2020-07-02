@@ -688,7 +688,7 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
           halite_ships[row, col] < convert_cost/4) and (
             halite_ships[row, col] > 0):
         # Override the convert logic - it's better to lose some ships than to
-        # convert too much
+        # convert too often (good candidate for stateful logic)
         target_row = np.mod(row + np.random.choice([-1, 1]), grid_size)
         target_col = np.mod(col + np.random.choice([-1, 1]), grid_size)
         ship_plans[ship_k] = (target_row, target_col, [])
