@@ -158,7 +158,7 @@ def base_at_collision_pos(prev_pos, ship_action, prev_step, step,
 
 def ship_loss_count_counterfact(actions, prev_units, obs, grid_size=21):
   # Approximately compute how many ships I would have lost at a certain
-  # transition with other actions. Approximate because we assume there are
+  # transition with some actions. Approximate because we assume there are
   # no 3-color ship collisions.
   
   # Compute the new position of all ships and bases, ignoring base spawns
@@ -199,7 +199,8 @@ def ship_loss_count_counterfact(actions, prev_units, obs, grid_size=21):
 # Count the number of lost ships in each game
 # A ship loss is defined as no longer having a ship with the same key in
 # subsequent steps and not having a base in place at the original ship position
-def get_game_ship_base_loss_count(replay, player_id, game_agent):
+def get_game_ship_base_loss_count(replay, player_id, game_agent,
+                                  process_each_step):
   num_steps = len(replay['steps'])
   prev_units_obs = replay['steps'][0][0]['observation']['players'][player_id]
   destroyed_conversions = 0
@@ -208,6 +209,7 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent):
   ship_loss = 0
   base_loss = 0
   ship_non_boxed_loss_counterfactual = 0
+  all_counterfactual_ship_loss = 0
   prev_obs = None
   prev_env_observation = None
   env_configuration = utils.dotdict(replay['configuration'])
@@ -247,6 +249,16 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent):
                 ship_non_boxed_loss_counterfactual += (
                   ship_loss_count_counterfact(mapped_actions, prev_units_obs,
                                               obs))
+    
+    if process_each_step and prev_obs is not None:
+      mapped_actions, _, step_details = (
+        rule_utils.get_config_or_callable_actions(
+          game_agent, prev_obs, prev_units_obs, prev_env_observation,
+          env_configuration))
+      
+      all_counterfactual_ship_loss += (
+        ship_loss_count_counterfact(mapped_actions, prev_units_obs, obs))
+    
           
     for k in prev_units_obs[1]:
       if not k in current_units_obs[1]:
@@ -257,34 +269,41 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent):
     prev_obs = obs
     
   return (destroyed_conversions, boxed_ship_loss, shipyard_collision_losses,
-          ship_loss, base_loss, ship_non_boxed_loss_counterfactual)
+          ship_loss, base_loss, ship_non_boxed_loss_counterfactual,
+          all_counterfactual_ship_loss)
 
+process_each_step = True
 stable_opponents_folder = os.path.join(
   this_folder, '../Rule agents/Stable opponents pool')
 agent_files = [f for f in os.listdir(stable_opponents_folder) if (
       f[-3:] == '.py')]
 game_agent = [rule_utils.sample_from_config_or_path(os.path.join(
   stable_opponents_folder, agent_files[-1]), return_callable=True),
-  initial_config][1]
+  initial_config][0]
 destroyed_conversion_losses = np.zeros((num_replays, 4))
 boxed_ship_losses = np.zeros((num_replays, 4))
 shipyard_collision_losses = np.zeros((num_replays, 4))
 ship_losses = np.zeros((num_replays, 4))
 base_losses = np.zeros((num_replays, 4))
 ship_non_boxed_loss_counterfactual = np.zeros((num_replays, 4))
+all_ship_loss_counterfactual = np.zeros((num_replays, 4))
+
 for i in range(num_replays):
+  print("Processing replay {} of {}".format(i+1, num_replays))
   replay = json_data[i]
   my_id = file_to_player[json_files[i]]
   other_ids = list(set(range(4)) - set([my_id]))
   
   for j, analysis_id in zip(range(4), [my_id] + other_ids):
-    losses = get_game_ship_base_loss_count(replay, analysis_id, game_agent)
+    losses = get_game_ship_base_loss_count(replay, analysis_id, game_agent,
+                                           process_each_step=process_each_step)
     destroyed_conversion_losses[i, j] = losses[0]
     boxed_ship_losses[i, j] = losses[1]
     shipyard_collision_losses[i, j] = losses[2]
     ship_losses[i, j] = losses[3]
     base_losses[i, j] = losses[4]
     ship_non_boxed_loss_counterfactual[i, j] = losses[5]
+    all_ship_loss_counterfactual[i, j] = losses[6]
 
 non_boxed_ship_losses = ship_losses - (
   boxed_ship_losses + shipyard_collision_losses)
