@@ -810,6 +810,14 @@ def store_config_on_first_run(config):
   if not os.path.exists(f):
     with open(f, 'w') as outfile:
       yaml.dump(config, outfile, default_flow_style=False)
+      
+# Allow dot access for dict
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
     
 ###############################################################################
 # Submission utilities                                                        #

@@ -30,7 +30,7 @@ config = {
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
   
   'num_agents_per_game': 4,
-  'pool_name': 'Rule based with evolution IV',
+  'pool_name': 'Rule based with evolution V',
 
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
