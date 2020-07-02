@@ -24,7 +24,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': True,
+  'use_multiprocessing': False,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
@@ -39,28 +39,32 @@ config = {
   #   'min_spawns_after_conversions': ((0, 2), "int", 0),
   #   'collect_smoothed_multiplier': ((0.1, 0.5), "float", 0),
   #   'collect_actual_multiplier': ((3.0, 9.0), "float", 0),
-  #   'return_base_multiplier': ((4.0, 8.0), "float", 0),
+  #   'collect_less_halite_ships_multiplier': ((0.0, 50.0), "float", 0),
     
+  #   'return_base_multiplier': ((4.0, 8.0), "float", 0),
+  #   'return_base_less_halite_ships_multiplier': ((0.0, 50.0), "float", 0),
   #   'early_game_return_base_additional_multiplier': ((1.0, 3.0), "float", 0),
   #   'early_game_return_boost_step': ((50, 150), "int", 0),
   #   'end_game_return_base_additional_multiplier': ((5.0, 15.0), "float", 0),
+    
   #   'establish_base_smoothed_multiplier': ((0.0, 0.5), "float", 0),
   #   'establish_first_base_smoothed_multiplier_correction': ((0.5, 1.5), "float", 0),
-  
   #   'establish_base_deposit_multiplier': ((0.5, 1.0), "float", 0),
+  #   'establish_base_less_halite_ships_multiplier': ((0.0, 50.0), "float", 0),
   #   'collect_run_enemy_multiplier': ((5.0, 15.0), "float", 0),
+    
   #   'return_base_run_enemy_multiplier': ((0.0, 2.0), "float", 0),
   #   'establish_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
   #   'collect_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-    
   #   'return_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
   #   'establish_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+    
   #   'ignore_catch_prob': ((0.3, 0.5), "float", 0),
   #   'max_ships': ((15, 25), "int", 1),
   #   'max_spawns_per_step': ((1, 3), "int", 1),
-    
   #   'nearby_ship_halite_spawn_constant': ((0.5, 3.0), "float", 0),
   #   'nearby_halite_spawn_constant': ((5.0, 20.0), "float", 0),
+    
   #   'remaining_budget_spawn_constant': ((0.1, 0.3), "float", 0),
   #   'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
   #   'max_spawn_relative_step_divisor': ((50.0, 200.0), "float", 1),
@@ -71,28 +75,32 @@ config = {
     'min_spawns_after_conversions': 1,
     'collect_smoothed_multiplier': 0.2,
     'collect_actual_multiplier': 6.0,
-    'return_base_multiplier': 6.0,
+    'collect_less_halite_ships_multiplier': 20,
     
+    'return_base_multiplier': 6.0,
+    'return_base_less_halite_ships_multiplier': 20,
     'early_game_return_base_additional_multiplier': 2.0,
     'early_game_return_boost_step': 100,
     'end_game_return_base_additional_multiplier': 10.0,
+    
     'establish_base_smoothed_multiplier': 0.0,
     'establish_first_base_smoothed_multiplier_correction': 1.0,
-    
     'establish_base_deposit_multiplier': 0.75,
+    'establish_base_less_halite_ships_multiplier': 20,
     'collect_run_enemy_multiplier': 10.0,
+    
     'return_base_run_enemy_multiplier': 1.0,
     'establish_base_run_enemy_multiplier': 4.0,
     'collect_catch_enemy_multiplier': 0.5,
-    
     'return_base_catch_enemy_multiplier': 0.5,
     'establish_base_catch_enemy_multiplier': 0.5,
+    
     'ignore_catch_prob': 0.5,
     'max_ships': 20,
     'max_spawns_per_step': 2,
-    
     'nearby_ship_halite_spawn_constant': 2.0,
     'nearby_halite_spawn_constant': 10.0,
+    
     'remaining_budget_spawn_constant': 0.2,
     'spawn_score_threshold': 50.0,
     'max_spawn_relative_step_divisor': 100.0,

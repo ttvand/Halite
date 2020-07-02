@@ -277,7 +277,7 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
   smoothed_halite = rule_utils.smooth2d(obs_halite)
   can_deposit_halite = my_bases.sum() > 0
   opponent_ships = np.stack([
-    rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0)
+    rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
   enemy_bases = np.stack([rbs[1] for rbs in observation[
@@ -290,12 +290,18 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
     dm = DISTANCE_MASKS[(row, col)]
     ship_halite = player_obs[2][ship_k][1]
     
+    # import pdb; pdb.set_trace()
+    opponent_smoother_less_halite_ships = rule_utils.smooth2d(np.logical_and(
+      opponent_ships, halite_ships <= ship_halite), smooth_kernel_dim=5)
+    
     # Scores 1: collecting halite at row, col
     # Multiply the smoothed halite, added with the obs_halite with a distance
     # mask, specific for the current row and column
     collect_grid_scores = dm*(
       smoothed_halite * config['collect_smoothed_multiplier'] + 
-      obs_halite * config['collect_actual_multiplier'])
+      obs_halite * config['collect_actual_multiplier']) - (
+        opponent_smoother_less_halite_ships * config[
+          'collect_less_halite_ships_multiplier'])
     
     # Override the collect score to 0 to avoid blocking the base early on in
     # the game: All squares right next to the initial base are set to 0
@@ -307,7 +313,9 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
     # Scores 2: returning to any of my bases
     return_to_base_scores = my_bases*dm*ship_halite*(
       config['return_base_multiplier'] + early_game_return_boost + (
-        end_game_return_boost))
+        end_game_return_boost)) - (
+          opponent_smoother_less_halite_ships * config[
+            'return_base_less_halite_ships_multiplier'])
     
     # Override the return base score to 0 to avoid blocking the base early on
     # in the game.
@@ -323,7 +331,9 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
           'establish_first_base_smoothed_multiplier_correction'])*(
             1-((my_bases*dm).max()))*(1-my_bases) - (
               convert_cost*can_deposit_halite) + ship_halite*(
-            config['establish_base_deposit_multiplier'])
+            config['establish_base_deposit_multiplier']) - (
+              opponent_smoother_less_halite_ships * config[
+                'establish_base_less_halite_ships_multiplier'])
             
     # Update the scores as a function of nearby enemy ships to avoid collisions
     # with opposing ships that carry less halite and promote collisions with
