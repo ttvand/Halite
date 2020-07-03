@@ -38,7 +38,7 @@ CONFIG = {
   'nearby_halite_spawn_constant': 10.0,
   'remaining_budget_spawn_constant': 0.2,
   'spawn_score_threshold': 50.0,
-  'max_spawn_relative_step_divisor': 200.0,
+  'max_spawn_relative_step_divisor': 100.0,
   }
 
 
