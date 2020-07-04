@@ -225,9 +225,13 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
     
     episode_step += 1
     
-  # # Evaluate when and why the first agent lost ships
-  # import pdb; pdb.set_trace()
-  # x = 1
+  # Evaluate why the game evolved as it did
+  vals_5000 = np.where(halite_scores[:, 0] == 5000)[0]
+  last_5000 = vals_5000[vals_5000 < 10][-1]
+  first_zero = np.where(halite_scores[:, 0] == 0)[0][0]
+  if first_zero - last_5000 != 10:
+    import pdb; pdb.set_trace()
+    x = 1
     
   # Obtain the terminal rewards for all agents
   halite_scores = halite_scores[:episode_step]
