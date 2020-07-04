@@ -15,7 +15,6 @@ import rule_actions_v1
 import rule_actions_v2
 
 
-
 CONVERT = "CONVERT"
 SPAWN = "SPAWN"
 

@@ -5,7 +5,13 @@ import utils
 import rule_utils
 
 
-MOVE_DIRECTIONS = [None, "NORTH", "SOUTH", "EAST", "WEST"]
+NORTH = "NORTH"
+SOUTH = "SOUTH"
+EAST = "EAST"
+WEST = "WEST"
+CONVERT = "CONVERT"
+SPAWN = "SPAWN"
+MOVE_DIRECTIONS = [None, NORTH, SOUTH, EAST, WEST]
 
 DISTANCE_MASKS = {}
 HALF_PLANES_CATCH = {}
@@ -42,19 +48,19 @@ for row in range(DISTANCE_MASK_DIM):
     run_distance_masks = {}
     
     for d in MOVE_DIRECTIONS[1:]:
-      if d == utils.NORTH:
+      if d == NORTH:
         catch_rows = np.mod(row - np.arange(half_distance_mask_dim) - 1,
                             DISTANCE_MASK_DIM)
         catch_cols = np.arange(DISTANCE_MASK_DIM)
-      if d == utils.SOUTH:
+      if d == SOUTH:
         catch_rows = np.mod(row + np.arange(half_distance_mask_dim) + 1,
                             DISTANCE_MASK_DIM)
         catch_cols = np.arange(DISTANCE_MASK_DIM)
-      if d == utils.WEST:
+      if d == WEST:
         catch_cols = np.mod(col - np.arange(half_distance_mask_dim) - 1,
                             DISTANCE_MASK_DIM)
         catch_rows = np.arange(DISTANCE_MASK_DIM)
-      if d == utils.EAST:
+      if d == EAST:
         catch_cols = np.mod(col + np.arange(half_distance_mask_dim) + 1,
                             DISTANCE_MASK_DIM)
         catch_rows = np.arange(DISTANCE_MASK_DIM)
@@ -79,10 +85,10 @@ def update_scores_enemy_ships(
     config, collect_grid_scores, return_to_base_scores, establish_base_scores,
     opponent_ships, halite_ships, row, col, grid_size, spawn_cost, min_dist=2):
   direction_halite_diff_distance={
-    utils.NORTH: None,
-    utils.SOUTH: None,
-    utils.EAST: None,
-    utils.WEST: None,
+    NORTH: None,
+    SOUTH: None,
+    EAST: None,
+    WEST: None,
     }
   for row_shift in range(-min_dist, min_dist+1):
     considered_row = (row + row_shift) % grid_size
@@ -92,10 +98,10 @@ def update_scores_enemy_ships(
       if distance <= min_dist:
         if opponent_ships[considered_row, considered_col]:
           relevant_dirs = []
-          relevant_dirs += [] if row_shift >= 0 else [utils.NORTH]
-          relevant_dirs += [] if row_shift <= 0 else [utils.SOUTH]
-          relevant_dirs += [] if col_shift <= 0 else [utils.EAST]
-          relevant_dirs += [] if col_shift >= 0 else [utils.WEST]
+          relevant_dirs += [] if row_shift >= 0 else [NORTH]
+          relevant_dirs += [] if row_shift <= 0 else [SOUTH]
+          relevant_dirs += [] if col_shift <= 0 else [EAST]
+          relevant_dirs += [] if col_shift >= 0 else [WEST]
           
           halite_diff = halite_ships[row, col] - halite_ships[
             considered_row, considered_col]
@@ -123,10 +129,13 @@ def update_scores_enemy_ships(
         mask_collect_return = HALF_PLANES_RUN[(row, col)][direction]
         valid_directions.remove(direction)
         if halite_diff_dist[1] == 1:
-          if None in valid_directions:
-            valid_directions.remove(None)
-            bad_directions.append(None)
-          mask_collect_return[row, col] = True
+          if halite_diff != 0:
+            # Only suppress the stay still action if the opponent has something
+            # to gain. TODO: consider making this a function of the game state
+            if None in valid_directions:
+              valid_directions.remove(None)
+              bad_directions.append(None)
+            mask_collect_return[row, col] = True
 
         # I can still mine halite at the current square if the opponent ship is
         # >1 moves away
@@ -168,19 +177,19 @@ def update_scores_blocking_enemy_bases(
     collect_grid_scores, return_to_base_scores, establish_base_scores, row, col,
     grid_size, enemy_bases, valid_directions):
   for d in MOVE_DIRECTIONS[1:]:
-    if d == utils.NORTH:
+    if d == NORTH:
       rows = np.mod(row - (1 + np.arange(half_distance_mask_dim)), grid_size)
       cols = np.repeat(col, half_distance_mask_dim)
       considered_vals = enemy_bases[rows, col]
-    elif d == utils.SOUTH:
+    elif d == SOUTH:
       rows = np.mod(row + (1 + np.arange(half_distance_mask_dim)), grid_size)
       cols = np.repeat(col, half_distance_mask_dim)
       considered_vals = enemy_bases[rows, col]
-    elif d == utils.WEST:
+    elif d == WEST:
       rows = np.repeat(row, half_distance_mask_dim)
       cols = np.mod(col - (1 + np.arange(half_distance_mask_dim)), grid_size)
       considered_vals = enemy_bases[row, cols]
-    elif d == utils.EAST:
+    elif d == EAST:
       rows = np.repeat(row, half_distance_mask_dim)
       cols = np.mod(col + (1 + np.arange(half_distance_mask_dim)), grid_size)
       considered_vals = enemy_bases[row, cols]
@@ -390,6 +399,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   new_bases = []
   
   # First, process the convert actions
+  # TODO: make it a function of the game state - e.g. don't convert low halite
+  # ships towards the end of a game.
   ship_plans = OrderedDict()
   for i, ship_k in enumerate(player_obs[2]):
     row, col = utils.row_col_from_square_grid_pos(
@@ -409,12 +420,14 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
       target_col = target_base[1][0]
       
       if (target_row == row and target_col == col) or convert_surrounded_ship:
-        ship_plans[ship_k] = rule_utils.CONVERT
+        ship_plans[ship_k] = CONVERT
         new_bases.append((row, col))
         my_bases[row, col] = True
         can_deposit_halite = True
       else:
         ship_plans[ship_k] = (target_row, target_col, ship_scores[3])
+        
+  # TODO: make sure we don't go over the base in the first moves and block it
         
   # Next, do another pass to coordinate the target squares. This is done in a
   # single pass for now where the selection order is determined based on the 
@@ -469,7 +482,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         
         if target_row == row and target_col == col and num_ships == 1 and (
             num_bases == 0) and convert_first_ship_on_None_action:
-          ship_plans[ship_k] = rule_utils.CONVERT
+          ship_plans[ship_k] = CONVERT
           my_bases[row, col] = True
           occupied_target_squares.append((row, col))
         else:
@@ -515,23 +528,19 @@ def get_dir_from_target(row, col, target_row, target_col, grid_size):
   shortest_directions = []
   if horiz_distance > 0:
     if target_col > col:
-      shortest_dirs = [utils.EAST if (target_col - col) <= half_grid else (
-        utils.WEST)]
+      shortest_dirs = [EAST if (target_col - col) <= half_grid else WEST]
     else:
-      shortest_dirs = [utils.WEST if (col - target_col) <= half_grid else (
-        utils.EAST)]
+      shortest_dirs = [WEST if (col - target_col) <= half_grid else EAST]
     if horiz_distance == grid_size/2:
-      shortest_dirs = [utils.EAST, utils.WEST]
+      shortest_dirs = [EAST, WEST]
     shortest_directions.extend(shortest_dirs)
   if vert_distance > 0:
     if target_row > row:
-      shortest_dirs = [utils.SOUTH if (target_row - row) <= half_grid else (
-        utils.NORTH)]
+      shortest_dirs = [SOUTH if (target_row - row) <= half_grid else NORTH]
     else:
-      shortest_dirs = [utils.NORTH if (row - target_row) <= half_grid else (
-        utils.SOUTH)]
+      shortest_dirs = [NORTH if (row - target_row) <= half_grid else SOUTH]
     if vert_distance == grid_size/2:
-      shortest_dirs = [utils.NORTH, utils.SOUTH]
+      shortest_dirs = [NORTH, SOUTH]
     shortest_directions.extend(shortest_dirs)
     
   return shortest_directions
@@ -754,7 +763,7 @@ def decide_existing_base_spawns(
   mapped_actions = {}
   for i, base_k in enumerate(player_obs[1]):
     if np.isin(i, spawn_ids):
-      mapped_actions[base_k] = rule_utils.SPAWN
+      mapped_actions[base_k] = SPAWN
       remaining_budget -= spawn_cost
       
   return mapped_actions, remaining_budget
