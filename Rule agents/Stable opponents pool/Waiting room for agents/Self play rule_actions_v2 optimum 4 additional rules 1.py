@@ -3,33 +3,38 @@ import copy
 import numpy as np
 from scipy import signal
 
-
+chaser = np.random.choice([False, True])
 CONFIG = {
   'halite_config_setting_divisor': 1.0,
   'min_spawns_after_conversions': 1,
-  'collect_smoothed_multiplier': 0.2,
-  'collect_actual_multiplier': 6.0,
-  'return_base_multiplier': 6.0,
+  'collect_smoothed_multiplier': 0.1,
+  'collect_actual_multiplier': 9.0,
+  'collect_less_halite_ships_multiplier_base': 0.8,
 
-  'early_game_return_base_additional_multiplier': 2.0,
-  'early_game_return_boost_step': 100,
-  'end_game_return_base_additional_multiplier': 10.0,
+  'collect_base_nearest_distance_exponent': 0.3,
+  'return_base_multiplier': 8.0,
+  'return_base_less_halite_ships_multiplier_base': 0.9,
+  'early_game_return_base_additional_multiplier': 1.0,
+  'early_game_return_boost_step': 120,
+
+  'end_game_return_base_additional_multiplier': 5.0,
   'establish_base_smoothed_multiplier': 0.0,
-  'establish_first_base_smoothed_multiplier_correction': 1.0,
+  'establish_first_base_smoothed_multiplier_correction': 1.5,
+  'establish_base_deposit_multiplier': 0.8,
+  'establish_base_less_halite_ships_multiplier_base': 1.0,
 
-  'establish_base_deposit_multiplier': 0.75,
   'collect_run_enemy_multiplier': 10.0,
-  'return_base_run_enemy_multiplier': 1.0,
-  'establish_base_run_enemy_multiplier': 4.0,
+  'return_base_run_enemy_multiplier': 2.0,
+  'establish_base_run_enemy_multiplier': 2.5,
   'collect_catch_enemy_multiplier': 0.5,
+  'return_base_catch_enemy_multiplier': 1.0,
 
-  'return_base_catch_enemy_multiplier': 0.5,
   'establish_base_catch_enemy_multiplier': 0.5,
   'ignore_catch_prob': 0.5,
   'max_ships': 20,
-  'max_spawns_per_step': 2,
-
+  'max_spawns_per_step': 3,
   'nearby_ship_halite_spawn_constant': 2.0,
+
   'nearby_halite_spawn_constant': 10.0,
   'remaining_budget_spawn_constant': 0.2,
   'spawn_score_threshold': 50.0,
@@ -42,8 +47,6 @@ SOUTH = "SOUTH"
 EAST = "EAST"
 WEST = "WEST"
 CONVERT = "CONVERT"
-SHIP_NONE = "SHIP_NONE"
-GO_NEAREST_BASE = "GO_NEAREST_BASE"
 SPAWN = "SPAWN"
 
 MOVE_DIRECTIONS = [None, NORTH, SOUTH, EAST, WEST]
@@ -65,10 +68,80 @@ HALITE_MULTIPLIER_CONFIG_ENTRIES = [
   "nearby_halite_spawn_constant",
           ]
 
+GAUSSIAN_2D_KERNELS = {}
+for dim in range(3, 16, 2):
+  # Modified from https://scipy-lectures.org/intro/scipy/auto_examples/solutions/plot_image_blur.html
+  center_distance = np.floor(np.abs(np.arange(dim) - (dim-1)/2))
+  horiz_distance = np.tile(center_distance, [dim, 1])
+  vert_distance = np.tile(np.expand_dims(center_distance, 1), [1, dim])
+  manh_distance = horiz_distance + vert_distance
+  kernel = np.exp(-manh_distance/(dim/4))
+  kernel[manh_distance > dim/2] = 0
+  
+  GAUSSIAN_2D_KERNELS[dim] = kernel
+  
+def row_col_from_square_grid_pos(pos, size):
+  col = pos % size
+  row = pos // size
+  
+  return row, col
+
+def mirror_edges(observation, num_mirror_dim):
+  if num_mirror_dim > 0:
+    # observation = np.arange(225).reshape((15,15)) # Debugging test
+    assert len(observation.shape) == 2
+    grid_size = observation.shape[0]
+    new_grid_size = grid_size + 2*num_mirror_dim
+    mirrored_obs = np.full((new_grid_size, new_grid_size), np.nan)
+    
+    # Fill in the original data
+    mirrored_obs[num_mirror_dim:(-num_mirror_dim),
+                 num_mirror_dim:(-num_mirror_dim)] = observation
+    
+    # Add top and bottom mirrored data
+    mirrored_obs[:num_mirror_dim, num_mirror_dim:(
+      -num_mirror_dim)] = observation[-num_mirror_dim:, :]
+    mirrored_obs[-num_mirror_dim:, num_mirror_dim:(
+      -num_mirror_dim)] = observation[:num_mirror_dim, :]
+    
+    # Add left and right mirrored data
+    mirrored_obs[:, :num_mirror_dim] = mirrored_obs[
+      :, -(2*num_mirror_dim):(-num_mirror_dim)]
+    mirrored_obs[:, -num_mirror_dim:] = mirrored_obs[
+      :, num_mirror_dim:(2*num_mirror_dim)]
+    
+    observation = mirrored_obs
+  
+  return observation
+
+
+def smooth2d(grid, smooth_kernel_dim=7, return_kernel=False):
+  edge_augmented = mirror_edges(grid, smooth_kernel_dim-1)
+  kernel = GAUSSIAN_2D_KERNELS[int(2*smooth_kernel_dim-1)]
+  convolved = signal.convolve2d(edge_augmented, kernel, mode="valid")
+  
+  if return_kernel:
+    return convolved, kernel
+  else:
+    return convolved
+  
+def move_ship_row_col(row, col, direction, size):
+  if direction == "NORTH":
+    return (size-1 if row == 0 else row-1, col)
+  elif direction == "SOUTH":
+    return (row+1 if row < (size-1) else 0, col)
+  elif direction == "EAST":
+    return (row, col+1 if col < (size-1) else 0)
+  elif direction == "WEST":
+    return (row, size-1 if col == 0 else col-1)
+  elif direction is None:
+    return (row, col)
+
 DISTANCE_MASKS = {}
 HALF_PLANES_CATCH = {}
 HALF_PLANES_RUN = {}
 ROW_COL_DISTANCE_MASKS = {}
+ROW_COL_MAX_DISTANCE_MASKS = {}
 DISTANCE_MASK_DIM = 21
 half_distance_mask_dim = int(DISTANCE_MASK_DIM/2)
 for row in range(DISTANCE_MASK_DIM):
@@ -132,28 +205,14 @@ for row in range(DISTANCE_MASK_DIM):
 
     for d in range(1, DISTANCE_MASK_DIM):
       ROW_COL_DISTANCE_MASKS[(row, col, d)] = manh_distance == d
-    
-GAUSSIAN_2D_KERNELS = {}
-for dim in range(3, 16, 2):
-  # Modified from https://scipy-lectures.org/intro/scipy/auto_examples/solutions/plot_image_blur.html
-  center_distance = np.floor(np.abs(np.arange(dim) - (dim-1)/2))
-  horiz_distance = np.tile(center_distance, [dim, 1])
-  vert_distance = np.tile(np.expand_dims(center_distance, 1), [1, dim])
-  manh_distance = horiz_distance + vert_distance
-  kernel = np.exp(-manh_distance/(dim/4))
-  kernel[manh_distance > dim/2] = 0
-  
-  GAUSSIAN_2D_KERNELS[dim] = kernel
-  
-def row_col_from_square_grid_pos(pos, size):
-  col = pos % size
-  row = pos // size
-  
-  return row, col
-    
+
+    for d in range(half_distance_mask_dim):
+      ROW_COL_MAX_DISTANCE_MASKS[(row, col, d)] = manh_distance <= d
+
 def update_scores_enemy_ships(
     config, collect_grid_scores, return_to_base_scores, establish_base_scores,
-    opponent_ships, halite_ships, row, col, grid_size, spawn_cost, min_dist=2):
+    opponent_ships, halite_ships, row, col, grid_size, spawn_cost,
+    drop_None_valid, min_dist=2):
   direction_halite_diff_distance={
     NORTH: None,
     SOUTH: None,
@@ -199,10 +258,13 @@ def update_scores_enemy_ships(
         mask_collect_return = HALF_PLANES_RUN[(row, col)][direction]
         valid_directions.remove(direction)
         if halite_diff_dist[1] == 1:
-          if None in valid_directions:
-            valid_directions.remove(None)
-            bad_directions.append(None)
-          mask_collect_return[row, col] = True
+          if halite_diff != 0:
+            # Only suppress the stay still action if the opponent has something
+            # to gain. TODO: consider making this a function of the game state
+            if None in valid_directions:
+              valid_directions.remove(None)
+              bad_directions.append(None)
+            mask_collect_return[row, col] = True
 
         # I can still mine halite at the current square if the opponent ship is
         # >1 moves away
@@ -235,31 +297,38 @@ def update_scores_enemy_ships(
           config['establish_base_catch_enemy_multiplier'])*distance_multiplier
         
         preferred_directions.append(direction)
+
+  if drop_None_valid and None in valid_directions:
+    valid_directions.remove(None)
         
   return (collect_grid_scores, return_to_base_scores, establish_base_scores,
           preferred_directions, valid_directions, len(bad_directions) == 5)
 
 # Update the scores as a function of blocking enemy bases
-def update_scores_blocking_enemy_bases(
+def update_scores_blockers(
     collect_grid_scores, return_to_base_scores, establish_base_scores, row, col,
-    grid_size, enemy_bases, valid_directions):
+    grid_size, blockers, valid_directions, early_base_direct_dir=None,
+    blocker_max_distance=half_distance_mask_dim):
   for d in MOVE_DIRECTIONS[1:]:
     if d == NORTH:
-      rows = np.mod(row - (1 + np.arange(half_distance_mask_dim)), grid_size)
-      cols = np.repeat(col, half_distance_mask_dim)
-      considered_vals = enemy_bases[rows, col]
+      rows = np.mod(row - (1 + np.arange(blocker_max_distance)), grid_size)
+      cols = np.repeat(col, blocker_max_distance)
+      considered_vals = blockers[rows, col]
     elif d == SOUTH:
-      rows = np.mod(row + (1 + np.arange(half_distance_mask_dim)), grid_size)
-      cols = np.repeat(col, half_distance_mask_dim)
-      considered_vals = enemy_bases[rows, col]
+      rows = np.mod(row + (1 + np.arange(blocker_max_distance)), grid_size)
+      cols = np.repeat(col, blocker_max_distance)
+      considered_vals = blockers[rows, col]
     elif d == WEST:
-      rows = np.repeat(row, half_distance_mask_dim)
-      cols = np.mod(col - (1 + np.arange(half_distance_mask_dim)), grid_size)
-      considered_vals = enemy_bases[row, cols]
+      rows = np.repeat(row, blocker_max_distance)
+      cols = np.mod(col - (1 + np.arange(blocker_max_distance)), grid_size)
+      considered_vals = blockers[row, cols]
     elif d == EAST:
-      rows = np.repeat(row, half_distance_mask_dim)
-      cols = np.mod(col + (1 + np.arange(half_distance_mask_dim)), grid_size)
-      considered_vals = enemy_bases[row, cols]
+      rows = np.repeat(row, blocker_max_distance)
+      cols = np.mod(col + (1 + np.arange(blocker_max_distance)), grid_size)
+      considered_vals = blockers[row, cols]
+
+    if d == early_base_direct_dir:
+      considered_vals[0] = 1
     
     if np.any(considered_vals):
       first_blocking_base_id = np.where(considered_vals)[0][0]
@@ -272,63 +341,43 @@ def update_scores_blocking_enemy_bases(
       
       if first_blocking_base_id == 0 and d in valid_directions:
         valid_directions.remove(d)
+        
+  # Additional logic for the use of avoiding collisions when there is only a
+  # single escape direction
+  if blockers[row, col]:
+    collect_grid_scores[row, col] = -1e9
+    return_to_base_scores[row, col] = -1e9
+    establish_base_scores[row, col] = -1e9
+    if None in valid_directions:
+      valid_directions.remove(None)
       
   return (collect_grid_scores, return_to_base_scores, establish_base_scores,
           valid_directions)
 
-def mirror_edges(observation, num_mirror_dim):
-  if num_mirror_dim > 0:
-    # observation = np.arange(225).reshape((15,15)) # Debugging test
-    assert len(observation.shape) == 2
-    grid_size = observation.shape[0]
-    new_grid_size = grid_size + 2*num_mirror_dim
-    mirrored_obs = np.full((new_grid_size, new_grid_size), np.nan)
-    
-    # Fill in the original data
-    mirrored_obs[num_mirror_dim:(-num_mirror_dim),
-                 num_mirror_dim:(-num_mirror_dim)] = observation
-    
-    # Add top and bottom mirrored data
-    mirrored_obs[:num_mirror_dim, num_mirror_dim:(
-      -num_mirror_dim)] = observation[-num_mirror_dim:, :]
-    mirrored_obs[-num_mirror_dim:, num_mirror_dim:(
-      -num_mirror_dim)] = observation[:num_mirror_dim, :]
-    
-    # Add left and right mirrored data
-    mirrored_obs[:, :num_mirror_dim] = mirrored_obs[
-      :, -(2*num_mirror_dim):(-num_mirror_dim)]
-    mirrored_obs[:, -num_mirror_dim:] = mirrored_obs[
-      :, num_mirror_dim:(2*num_mirror_dim)]
-    
-    observation = mirrored_obs
-  
-  return observation
-
-
-def smooth2d(grid, smooth_kernel_dim=7, return_kernel=False):
-  edge_augmented = mirror_edges(grid, smooth_kernel_dim-1)
-  kernel = GAUSSIAN_2D_KERNELS[int(2*smooth_kernel_dim-1)]
-  convolved = signal.convolve2d(edge_augmented, kernel, mode="valid")
-  
-  if return_kernel:
-    return convolved, kernel
-  else:
-    return convolved
-
-
-def set_scores_single_nearby_zero(scores, nearby, size):
+def set_scores_single_nearby_zero(scores, nearby, size, ship_row, ship_col,
+                                  nearby_distance=1):
   nearby_pos = np.where(nearby)
   row = nearby_pos[0][0]
   col = nearby_pos[1][0]
+  next_nearby_pos = None
+  drop_None_valid = False
   
-  for i in range(-1, 2):
+  for i in range(-nearby_distance, nearby_distance+1):
     near_row = (row + i) % size
-    for j in range(-1, 2):
-      if i!=0 or j!=0:
-        near_col = (col + j) % size
+    for j in range(-nearby_distance, nearby_distance+1):
+      near_col = (col + j) % size
+      if i != 0 or j != 0:
+        # Don't gather near the base and don't move on top of it
         scores[near_row, near_col] = 0
+        if near_row == ship_row and near_col == ship_col:
+          next_nearby_pos = get_dir_from_target(
+            ship_row, ship_col, row, col, size)[0]
+      else:
+        if near_row == ship_row and near_col == ship_col:
+          # Don't stay on top of the base
+          drop_None_valid = True
   
-  return scores
+  return scores, next_nearby_pos, drop_None_valid
 
 def grid_distance(r1, c1, r2, c2, size):
   horiz_diff = c2-c1
@@ -352,6 +401,19 @@ def override_early_return_base_scores(
     return_to_base_scores[base_row, base_col] = 0
     
   return return_to_base_scores
+
+def get_nearest_base_distance(player_obs, grid_size):
+  base_dms = []
+  for b in player_obs[1]:
+    row, col = row_col_from_square_grid_pos(player_obs[1][b], grid_size)
+    base_dms.append(DISTANCE_MASKS[(row, col)])
+  
+  if base_dms:
+    base_nearest_distance = np.stack(base_dms).max(0)
+  else:
+    base_nearest_distance = np.ones((grid_size, grid_size))
+    
+  return base_nearest_distance
 
 
 def get_ship_scores(config, observation, player_obs, env_config, verbose):
@@ -384,12 +446,21 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
   smoothed_halite = smooth2d(obs_halite)
   can_deposit_halite = my_bases.sum() > 0
   opponent_ships = np.stack([
-    rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0)
+    rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
   enemy_bases = np.stack([rbs[1] for rbs in observation[
     'rewards_bases_ships']])[1:].sum(0)
   
+  # Flag to indicate I should not occupy/flood my base with early ships
+  my_halite = observation['rewards_bases_ships'][0][0]
+  avoid_base_early_game = my_halite >= spawn_cost and (
+    observation['step'] < 20) and my_bases.sum() == 1 and (
+      my_halite % 500) == 0 and num_ships < 9
+
+  # Distance to nearest base mask - gathering closer to my base is better
+  base_nearest_distance = get_nearest_base_distance(player_obs, grid_size)
+
   ship_scores = {}
   for i, ship_k in enumerate(player_obs[2]):
     row, col = row_col_from_square_grid_pos(
@@ -397,29 +468,41 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
     dm = DISTANCE_MASKS[(row, col)]
     ship_halite = player_obs[2][ship_k][1]
     
+    opponent_smoother_less_halite_ships = smooth2d(np.logical_and(
+      opponent_ships, halite_ships <= ship_halite), smooth_kernel_dim=5)
+    
     # Scores 1: collecting halite at row, col
     # Multiply the smoothed halite, added with the obs_halite with a distance
     # mask, specific for the current row and column
     collect_grid_scores = dm*(
       smoothed_halite * config['collect_smoothed_multiplier'] + 
-      obs_halite * config['collect_actual_multiplier'])
+      obs_halite * config['collect_actual_multiplier']) * (
+        config['collect_less_halite_ships_multiplier_base'] ** (
+          opponent_smoother_less_halite_ships)) * (
+            base_nearest_distance ** config[
+              'collect_base_nearest_distance_exponent'])
     
     # Override the collect score to 0 to avoid blocking the base early on in
     # the game: All squares right next to the initial base are set to 0
-    if observation['rewards_bases_ships'][0][0] >= spawn_cost and (
-        observation['step'] < 20) and my_bases.sum() == 1:
-      collect_grid_scores = set_scores_single_nearby_zero(
-        collect_grid_scores, my_bases, grid_size)
+    if avoid_base_early_game:
+      collect_grid_scores, early_next_base_dir, drop_None_valid = (
+        set_scores_single_nearby_zero(
+          collect_grid_scores, my_bases, grid_size, row, col))
+    else:
+      early_next_base_dir = None
+      drop_None_valid = False
     
     # Scores 2: returning to any of my bases
-    return_to_base_scores = my_bases*dm*ship_halite*(
-      config['return_base_multiplier'] + early_game_return_boost + (
-        end_game_return_boost))
+    base_return_grid_multiplier = dm*ship_halite*(
+      config['return_base_multiplier'] * (
+        config['return_base_less_halite_ships_multiplier_base'] ** (
+          opponent_smoother_less_halite_ships)) + early_game_return_boost + (
+            end_game_return_boost))
+    return_to_base_scores = my_bases*base_return_grid_multiplier
     
     # Override the return base score to 0 to avoid blocking the base early on
     # in the game.
-    if observation['rewards_bases_ships'][0][0] >= spawn_cost and (
-        observation['step'] < 20) and my_bases.sum() == 1 and num_ships < 9:
+    if avoid_base_early_game:
       return_to_base_scores = override_early_return_base_scores(
         return_to_base_scores, my_bases, row, col, grid_size, num_ships)
     
@@ -428,10 +511,13 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
       smoothed_halite-obs_halite) * (config[
         'establish_base_smoothed_multiplier'] + first_base*config[
           'establish_first_base_smoothed_multiplier_correction'])*(
-            1-((my_bases*dm).max()))*(1-my_bases) - (
-              convert_cost*can_deposit_halite) + ship_halite*(
-            config['establish_base_deposit_multiplier'])
-            
+            1-((my_bases*dm).max()))*(1-my_bases) * (
+        config['establish_base_less_halite_ships_multiplier_base'] ** (
+          opponent_smoother_less_halite_ships)) - (
+              convert_cost*can_deposit_halite) + min(
+                ship_halite, convert_cost)*(
+                  config['establish_base_deposit_multiplier'])
+
     # Update the scores as a function of nearby enemy ships to avoid collisions
     # with opposing ships that carry less halite and promote collisions with
     # enemy ships that carry less halite
@@ -440,15 +526,18 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
      agent_surrounded) = update_scores_enemy_ships(
        config, collect_grid_scores, return_to_base_scores,
        establish_base_scores, opponent_ships, halite_ships, row, col,
-       grid_size, spawn_cost)
+       grid_size, spawn_cost, drop_None_valid)
        
-    # Update the scores as a function of blocking enemy bases
+    # Update the scores as a function of blocking enemy bases and my early
+    # game initial base
     (collect_grid_scores, return_to_base_scores, establish_base_scores,
-     valid_directions) = update_scores_blocking_enemy_bases(
+     valid_directions) = update_scores_blockers(
        collect_grid_scores, return_to_base_scores, establish_base_scores,
-       row, col, grid_size, enemy_bases, valid_directions)
+       row, col, grid_size, enemy_bases, valid_directions, early_next_base_dir)
             
     if last_episode_turn:
+      # Convert all ships with more halite than the convert cost on the last
+      # episode step
       establish_base_scores[row, col] = 1e9*(ship_halite > convert_cost)
         
     ship_scores[ship_k] = (collect_grid_scores, return_to_base_scores,
@@ -469,6 +558,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   new_bases = []
   
   # First, process the convert actions
+  # TODO: make it a function of the game state - e.g. don't convert low halite
+  # ships towards the end of a game.
   ship_plans = OrderedDict()
   for i, ship_k in enumerate(player_obs[2]):
     row, col = row_col_from_square_grid_pos(
@@ -502,6 +593,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   for i, ship_k in enumerate(player_obs[2]):
     ship_scores = all_ship_scores[ship_k]
     for (r, c) in new_bases:
+      # TODO: Update the return to base score for new bases
       ship_scores[0][r, c] = 0
       ship_scores[2][r, c] = 0
     all_ship_scores[ship_k] = ship_scores
@@ -512,6 +604,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     
   ship_order = np.argsort(-ship_priority_scores)
   occupied_target_squares = []
+  single_escape_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
+  single_path_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
   return_base_distances = []
   for i in range(num_ships):
     ship_k = ship_ids[ship_order[i]]
@@ -519,12 +613,21 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
       row, col = row_col_from_square_grid_pos(
         player_obs[2][ship_k][0], grid_size)
       ship_scores = all_ship_scores[ship_k]
+      valid_directions = ship_scores[5]
+      
+      for sq, d in [(single_escape_squares, 4), (single_path_squares, 1)]:
+        if sq.sum():
+          (s0, s1, s2, s5) = update_scores_blockers(
+            ship_scores[0], ship_scores[1], ship_scores[2], row, col,
+            grid_size, sq, valid_directions, blocker_max_distance=d)
+          ship_scores = (s0, s1, s2, ship_scores[3], ship_scores[4], s5)
       
       for (r, c) in occupied_target_squares:
         ship_scores[0][r, c] = 0
         ship_scores[2][r, c] = 0
 
       for (r, c, d) in return_base_distances:
+        # This coordinates return to base actions and avoids base blocking
         if grid_distance(r, c, row, col, grid_size) == d:
           ship_scores[1][r, c] = 0
       
@@ -548,7 +651,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
           occupied_target_squares.append((target_row, target_col))
       elif best_return_score >= best_establish_score:
         # Return base mode
-        # TODO: pick a new established base if that is closer
         target_return = np.where(ship_scores[1] == ship_scores[1].max())
         target_row = target_return[0][0]
         target_col = target_return[1][0]
@@ -563,10 +665,31 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         target_col = target_base[1][0]
         ship_plans[ship_k] = (target_row, target_col, ship_scores[3])
         occupied_target_squares.append((target_row, target_col))
+        
+      if len(valid_directions) == 1 and not None in valid_directions and (
+          target_row != row or target_col != col):
+        # I have only one escape direction and must therefore take that path
+        escape_square = move_ship_row_col(
+          row, col, valid_directions[0], grid_size)
+        single_escape_squares[escape_square[0], escape_square[1]] = 1
+        
+      elif (target_row == row) != (target_col == col):
+        # I only have a single path to my target, so my next position, which is
+        # deterministic, should be treated as an opponent base (don't set
+        # plan targets behind the ship)
+        move_dir = get_dir_from_target(
+          row, col, target_row, target_col, grid_size)[0]
+        next_square = move_ship_row_col(
+          row, col, move_dir, grid_size)
+        single_path_squares[next_square[0], next_square[1]] = 1
+        
+    all_ship_scores[ship_k] = ship_scores
       
-  return ship_plans, my_bases
+  return ship_plans, my_bases, all_ship_scores
 
 def get_dir_from_target(row, col, target_row, target_col, grid_size):
+  if row == target_row and col == target_col:
+    return [None]
   horiz_diff = target_col-col
   horiz_distance = min(np.abs(horiz_diff),
     min(np.abs(horiz_diff-grid_size), np.abs(horiz_diff+grid_size)))
@@ -594,18 +717,6 @@ def get_dir_from_target(row, col, target_row, target_col, grid_size):
     shortest_directions.extend(shortest_dirs)
     
   return shortest_directions
-
-def move_ship_row_col(row, col, direction, size):
-  if direction == "NORTH":
-    return (size-1 if row == 0 else row-1, col)
-  elif direction == "SOUTH":
-    return (row+1 if row < (size-1) else 0, col)
-  elif direction == "EAST":
-    return (row, col+1 if col < (size-1) else 0)
-  elif direction == "WEST":
-    return (row, size-1 if col == 0 else col-1)
-  elif direction is None:
-    return (row, col)
 
 def map_ship_plans_to_actions(config, observation, player_obs, env_config,
                               verbose, ship_scores, ship_plans):
@@ -659,13 +770,21 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
       player_obs[2][ship_k][0], grid_size)
     has_selected_action = False
     if isinstance(ship_plans[ship_k], str):
+      # TODO: verify this is not buggy when the opponent has destroyed one of
+      # my bases and there are no bases left
       if ship_plans[ship_k] == "CONVERT" and (
           halite_ships[row, col] < convert_cost/4) and (
-            halite_ships[row, col] > 0):
+            halite_ships[row, col] > 0) and num_ships > 1:
         # Override the convert logic - it's better to lose some ships than to
-        # convert too much
-        target_row = np.mod(row + np.random.choice([-1, 1]), grid_size)
-        target_col = np.mod(col + np.random.choice([-1, 1]), grid_size)
+        # convert too often (good candidate for stateful logic)
+        if not ship_scores[ship_k][5]:
+          # It's better not to lose halite to some opponents
+          # TODO: make it a function of the current score, ships and base count
+          target_row = np.mod(row + np.random.choice([-1, 1]), grid_size)
+          target_col = np.mod(col + np.random.choice([-1, 1]), grid_size)
+        else:
+          target_row = np.mod(row + np.random.choice([-1, 1]), grid_size)
+          target_col = np.mod(col + np.random.choice([-1, 1]), grid_size)
         ship_plans[ship_k] = (target_row, target_col, [])
       else:
         ship_actions[ship_k] = ship_plans[ship_k]
@@ -682,29 +801,47 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
       for a in shortest_actions:
         move_row, move_col = move_ship_row_col(
           row, col, a, grid_size)
-        if not bad_positions[move_row, move_col]:
+        if not bad_positions[move_row, move_col] and a in ship_scores[
+            ship_k][5]:
           valid_actions.append(a)
 
       if valid_actions:
         if preferred_directions:
           # TODO: figure out if this is actually helpful (it makes the agent
-          # very predictable)
+          # quite predictable)
           intersect_directions = list(set(valid_actions) & set(
             preferred_directions))
           if intersect_directions:
             valid_actions = intersect_directions
         action = str(np.random.choice(valid_actions))
+        action = None if action == 'None' else action
       else:
-        action = None
-        if bad_positions[row, col]:
-          # Pick a random, not bad action
+        # I can not move to my target using a shortest path action
+        # Alternative: consider all valid, not bad actions
+        valid_not_bad_actions = []
+        for a in MOVE_DIRECTIONS:
+          if a in ship_scores[ship_k][5]:
+            move_row, move_col = move_ship_row_col(row, col, a, grid_size)
+            if not bad_positions[move_row, move_col]:
+              valid_not_bad_actions.append(a)
+              
+        if valid_not_bad_actions:
+          action = np.random.choice(valid_not_bad_actions)
+        else:
+          # Pick a random, not bad moving action
           shuffled_actions = np.random.permutation(MOVE_DIRECTIONS[1:])
+          found_non_bad = False
           for a in shuffled_actions:
-            move_row, move_col = move_ship_row_col(
-              row, col, a, grid_size)
+            move_row, move_col = move_ship_row_col(row, col, a, grid_size)
             if not bad_positions[move_row, move_col]:
               action = str(a)
+              found_non_bad = True
               break
+          
+          # If all actions are bad: do nothing - this is very rare since it
+          # would mean being surrounded by my other ships and opponent bases
+          if not found_non_bad:
+            action = None
       
       # Update my_next_ships
       new_row, new_col = move_ship_row_col(
@@ -733,7 +870,8 @@ def decide_existing_base_spawns(
   max_spawns = min(max_spawns, int(obs_halite.sum()/2/spawn_cost))
   relative_step = observation['relative_step']
   max_spawns = min(max_spawns, int(
-    obs_halite.sum()/min(total_ship_count+1e-9, (num_ships+1e-9)*2)/spawn_cost*(
+    obs_halite.sum()/min(
+      total_ship_count+1e-9, (num_ships+1e-9)*2)/spawn_cost*(
       1-relative_step)*398/config['max_spawn_relative_step_divisor']))
   last_episode_turn = observation['relative_step'] == 1
 
@@ -756,13 +894,18 @@ def decide_existing_base_spawns(
     
     # Don't spawn when there is a returning ship that wants to enter the base
     # in two steps
-    for k in ship_plans:
-      if ship_plans[k][0] == row and ship_plans[k][1] == col:
-        updated_distance = grid_distance(row, col, updated_ship_pos[k][0],
-                                         updated_ship_pos[k][1], grid_size)
-        if updated_distance == 1:
-          spawn_scores[i] -= 1e6
-          break
+    # Exception: if the base is not too crowded, it is ok to spawn in this
+    # scenario.
+    near_base_ship_count = np.logical_and(
+      my_next_ships, ROW_COL_MAX_DISTANCE_MASKS[(row, col, 3)]).sum()
+    if near_base_ship_count >= 3:
+      for k in ship_plans:
+        if ship_plans[k][0] == row and ship_plans[k][1] == col:
+          updated_distance = grid_distance(row, col, updated_ship_pos[k][0],
+                                           updated_ship_pos[k][1], grid_size)
+          if updated_distance == 1:
+            spawn_scores[i] -= 1e6
+            break
     
     # Spawn less when the base is crowded with ships with a lot of halite
     # TODO: use the updated ship halite
@@ -809,8 +952,9 @@ def get_config_actions(config, observation, player_obs, env_config,
                                 verbose)
   
   # Compute the coordinated high level ship plan
-  ship_plans, my_next_bases = get_ship_plans(
-    config, observation, player_obs, env_config, verbose, ship_scores)
+  ship_plans, my_next_bases, plan_ship_scores = get_ship_plans(
+    config, observation, player_obs, env_config, verbose,
+    copy.deepcopy(ship_scores))
   
   # Translate the ship high level plans to basic move/convert actions
   (mapped_actions, remaining_budget, my_next_ships, my_next_halite,

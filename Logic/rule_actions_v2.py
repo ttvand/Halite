@@ -1,4 +1,4 @@
-from collections import OrderedDict 
+from collections import OrderedDict
 import copy
 import numpy as np
 import utils
@@ -81,13 +81,14 @@ for row in range(DISTANCE_MASK_DIM):
 
     for d in range(1, DISTANCE_MASK_DIM):
       ROW_COL_DISTANCE_MASKS[(row, col, d)] = manh_distance == d
-      
+
     for d in range(half_distance_mask_dim):
       ROW_COL_MAX_DISTANCE_MASKS[(row, col, d)] = manh_distance <= d
-    
+
 def update_scores_enemy_ships(
     config, collect_grid_scores, return_to_base_scores, establish_base_scores,
-    opponent_ships, halite_ships, row, col, grid_size, spawn_cost, min_dist=2):
+    opponent_ships, halite_ships, row, col, grid_size, spawn_cost,
+    drop_None_valid, min_dist=2):
   direction_halite_diff_distance={
     NORTH: None,
     SOUTH: None,
@@ -172,32 +173,36 @@ def update_scores_enemy_ships(
           config['establish_base_catch_enemy_multiplier'])*distance_multiplier
         
         preferred_directions.append(direction)
+
+  if drop_None_valid and None in valid_directions:
+    valid_directions.remove(None)
         
   return (collect_grid_scores, return_to_base_scores, establish_base_scores,
           preferred_directions, valid_directions, len(bad_directions) == 5)
 
 # Update the scores as a function of blocking enemy bases
-def update_scores_blocking_enemy_bases(
+def update_scores_blockers(
     collect_grid_scores, return_to_base_scores, establish_base_scores, row, col,
-    grid_size, enemy_bases, valid_directions, early_base_direct_dir=None):
+    grid_size, blockers, valid_directions, early_base_direct_dir=None,
+    blocker_max_distance=half_distance_mask_dim):
   for d in MOVE_DIRECTIONS[1:]:
     if d == NORTH:
-      rows = np.mod(row - (1 + np.arange(half_distance_mask_dim)), grid_size)
-      cols = np.repeat(col, half_distance_mask_dim)
-      considered_vals = enemy_bases[rows, col]
+      rows = np.mod(row - (1 + np.arange(blocker_max_distance)), grid_size)
+      cols = np.repeat(col, blocker_max_distance)
+      considered_vals = blockers[rows, col]
     elif d == SOUTH:
-      rows = np.mod(row + (1 + np.arange(half_distance_mask_dim)), grid_size)
-      cols = np.repeat(col, half_distance_mask_dim)
-      considered_vals = enemy_bases[rows, col]
+      rows = np.mod(row + (1 + np.arange(blocker_max_distance)), grid_size)
+      cols = np.repeat(col, blocker_max_distance)
+      considered_vals = blockers[rows, col]
     elif d == WEST:
-      rows = np.repeat(row, half_distance_mask_dim)
-      cols = np.mod(col - (1 + np.arange(half_distance_mask_dim)), grid_size)
-      considered_vals = enemy_bases[row, cols]
+      rows = np.repeat(row, blocker_max_distance)
+      cols = np.mod(col - (1 + np.arange(blocker_max_distance)), grid_size)
+      considered_vals = blockers[row, cols]
     elif d == EAST:
-      rows = np.repeat(row, half_distance_mask_dim)
-      cols = np.mod(col + (1 + np.arange(half_distance_mask_dim)), grid_size)
-      considered_vals = enemy_bases[row, cols]
-    
+      rows = np.repeat(row, blocker_max_distance)
+      cols = np.mod(col + (1 + np.arange(blocker_max_distance)), grid_size)
+      considered_vals = blockers[row, cols]
+
     if d == early_base_direct_dir:
       considered_vals[0] = 1
     
@@ -215,7 +220,7 @@ def update_scores_blocking_enemy_bases(
         
   # Additional logic for the use of avoiding collisions when there is only a
   # single escape direction
-  if enemy_bases[row, col]:
+  if blockers[row, col]:
     collect_grid_scores[row, col] = -1e9
     return_to_base_scores[row, col] = -1e9
     establish_base_scores[row, col] = -1e9
@@ -231,18 +236,24 @@ def set_scores_single_nearby_zero(scores, nearby, size, ship_row, ship_col,
   row = nearby_pos[0][0]
   col = nearby_pos[1][0]
   next_nearby_pos = None
+  drop_None_valid = False
   
   for i in range(-nearby_distance, nearby_distance+1):
     near_row = (row + i) % size
     for j in range(-nearby_distance, nearby_distance+1):
+      near_col = (col + j) % size
       if i != 0 or j != 0:
-        near_col = (col + j) % size
+        # Don't gather near the base and don't move on top of it
         scores[near_row, near_col] = 0
         if near_row == ship_row and near_col == ship_col:
           next_nearby_pos = get_dir_from_target(
             ship_row, ship_col, row, col, size)[0]
+      else:
+        if near_row == ship_row and near_col == ship_col:
+          # Don't stay on top of the base
+          drop_None_valid = True
   
-  return scores, next_nearby_pos
+  return scores, next_nearby_pos, drop_None_valid
 
 def grid_distance(r1, c1, r2, c2, size):
   horiz_diff = c2-c1
@@ -322,10 +333,10 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
   avoid_base_early_game = my_halite >= spawn_cost and (
     observation['step'] < 20) and my_bases.sum() == 1 and (
       my_halite % 500) == 0 and num_ships < 9
-      
+
   # Distance to nearest base mask - gathering closer to my base is better
   base_nearest_distance = get_nearest_base_distance(player_obs, grid_size)
-    
+
   ship_scores = {}
   for i, ship_k in enumerate(player_obs[2]):
     row, col = utils.row_col_from_square_grid_pos(
@@ -350,17 +361,20 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
     # Override the collect score to 0 to avoid blocking the base early on in
     # the game: All squares right next to the initial base are set to 0
     if avoid_base_early_game:
-      collect_grid_scores, early_next_base_dir = set_scores_single_nearby_zero(
-        collect_grid_scores, my_bases, grid_size, row, col)
+      collect_grid_scores, early_next_base_dir, drop_None_valid = (
+        set_scores_single_nearby_zero(
+          collect_grid_scores, my_bases, grid_size, row, col))
     else:
       early_next_base_dir = None
+      drop_None_valid = False
     
     # Scores 2: returning to any of my bases
-    return_to_base_scores = my_bases*dm*ship_halite*(
+    base_return_grid_multiplier = dm*ship_halite*(
       config['return_base_multiplier'] * (
         config['return_base_less_halite_ships_multiplier_base'] ** (
           opponent_smoother_less_halite_ships)) + early_game_return_boost + (
             end_game_return_boost))
+    return_to_base_scores = my_bases*base_return_grid_multiplier
     
     # Override the return base score to 0 to avoid blocking the base early on
     # in the game.
@@ -379,7 +393,7 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
               convert_cost*can_deposit_halite) + min(
                 ship_halite, convert_cost)*(
                   config['establish_base_deposit_multiplier'])
-                  
+
     # Update the scores as a function of nearby enemy ships to avoid collisions
     # with opposing ships that carry less halite and promote collisions with
     # enemy ships that carry less halite
@@ -388,16 +402,18 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
      agent_surrounded) = update_scores_enemy_ships(
        config, collect_grid_scores, return_to_base_scores,
        establish_base_scores, opponent_ships, halite_ships, row, col,
-       grid_size, spawn_cost)
+       grid_size, spawn_cost, drop_None_valid)
        
     # Update the scores as a function of blocking enemy bases and my early
     # game initial base
     (collect_grid_scores, return_to_base_scores, establish_base_scores,
-     valid_directions) = update_scores_blocking_enemy_bases(
+     valid_directions) = update_scores_blockers(
        collect_grid_scores, return_to_base_scores, establish_base_scores,
        row, col, grid_size, enemy_bases, valid_directions, early_next_base_dir)
             
     if last_episode_turn:
+      # Convert all ships with more halite than the convert cost on the last
+      # episode step
       establish_base_scores[row, col] = 1e9*(ship_halite > convert_cost)
         
     ship_scores[ship_k] = (collect_grid_scores, return_to_base_scores,
@@ -446,8 +462,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
       else:
         ship_plans[ship_k] = (target_row, target_col, ship_scores[3])
         
-  # TODO: make sure we don't go over the base in the first moves and block it
-        
   # Next, do another pass to coordinate the target squares. This is done in a
   # single pass for now where the selection order is determined based on the 
   # availability of > 1 direction in combination with the initial best score
@@ -455,6 +469,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   for i, ship_k in enumerate(player_obs[2]):
     ship_scores = all_ship_scores[ship_k]
     for (r, c) in new_bases:
+      # TODO: Update the return to base score for new bases
       ship_scores[0][r, c] = 0
       ship_scores[2][r, c] = 0
     all_ship_scores[ship_k] = ship_scores
@@ -466,6 +481,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   ship_order = np.argsort(-ship_priority_scores)
   occupied_target_squares = []
   single_escape_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
+  single_path_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
   return_base_distances = []
   for i in range(num_ships):
     ship_k = ship_ids[ship_order[i]]
@@ -475,17 +491,19 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
       ship_scores = all_ship_scores[ship_k]
       valid_directions = ship_scores[5]
       
-      if single_escape_squares.sum():
-        (s0, s1, s2, s5) = update_scores_blocking_enemy_bases(
-          ship_scores[0], ship_scores[1], ship_scores[2], row, col,
-          grid_size, single_escape_squares, valid_directions)
-        ship_scores = (s0, s1, s2, ship_scores[3], ship_scores[4], s5)
+      for sq, d in [(single_escape_squares, 4), (single_path_squares, 1)]:
+        if sq.sum():
+          (s0, s1, s2, s5) = update_scores_blockers(
+            ship_scores[0], ship_scores[1], ship_scores[2], row, col,
+            grid_size, sq, valid_directions, blocker_max_distance=d)
+          ship_scores = (s0, s1, s2, ship_scores[3], ship_scores[4], s5)
       
       for (r, c) in occupied_target_squares:
         ship_scores[0][r, c] = 0
         ship_scores[2][r, c] = 0
 
       for (r, c, d) in return_base_distances:
+        # This coordinates return to base actions and avoids base blocking
         if grid_distance(r, c, row, col, grid_size) == d:
           ship_scores[1][r, c] = 0
       
@@ -509,7 +527,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
           occupied_target_squares.append((target_row, target_col))
       elif best_return_score >= best_establish_score:
         # Return base mode
-        # TODO: pick a new established base if that is closer
         target_return = np.where(ship_scores[1] == ship_scores[1].max())
         target_row = target_return[0][0]
         target_col = target_return[1][0]
@@ -527,11 +544,22 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         
       if len(valid_directions) == 1 and not None in valid_directions and (
           target_row != row or target_col != col):
+        # I have only one escape direction and must therefore take that path
         escape_square = rule_utils.move_ship_row_col(
-          row, col, ship_scores[5][0], grid_size)
+          row, col, valid_directions[0], grid_size)
         single_escape_squares[escape_square[0], escape_square[1]] = 1
         
-    all_ship_scores[ship_k]
+      elif (target_row == row) != (target_col == col):
+        # I only have a single path to my target, so my next position, which is
+        # deterministic, should be treated as an opponent base (don't set
+        # plan targets behind the ship)
+        move_dir = get_dir_from_target(
+          row, col, target_row, target_col, grid_size)[0]
+        next_square = rule_utils.move_ship_row_col(
+          row, col, move_dir, grid_size)
+        single_path_squares[next_square[0], next_square[1]] = 1
+        
+    all_ship_scores[ship_k] = ship_scores
       
   return ship_plans, my_bases, all_ship_scores
 

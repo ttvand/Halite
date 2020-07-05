@@ -5,8 +5,9 @@ from recordtype import recordtype
 import multiprocessing as mp
 import numpy as np
 import os
-import time
+import random
 import rule_utils
+import time
 import utils
 
 ExperienceGame = recordtype('ExperienceGame', [
@@ -24,6 +25,7 @@ ExperienceGame = recordtype('ExperienceGame', [
   'terminal_halite',
   'total_halite_spent',
   'opponent_names',
+  'random_seed',
   ])
 
 
@@ -157,8 +159,12 @@ def get_base_and_ship_counts(env):
   return terminal_base_counts, terminal_ship_counts
 
 def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
-                                   verbose, game_id):
+                                   verbose, game_id, random_seed):
   episode_start_time = time.time()
+  
+  # Generate reproducible data for better debugging
+  np.random.seed(random_seed)
+  random.seed(random_seed)
   
   game_agents = [a if isinstance(a, dict) else (
     environment_utils.get_last_callable(a)) for a in game_agents]
@@ -230,6 +236,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
   last_5000 = vals_5000[vals_5000 < 10][-1]
   first_zero = np.where(halite_scores[:, 0] == 0)[0][0]
   if first_zero - last_5000 != 10:
+    print("Error random seed: {}".format(random_seed))
     import pdb; pdb.set_trace()
     x = 1
     
@@ -257,6 +264,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
         terminal_halite,
         total_halite_spent,
         None, # Opponent names added outside of this function
+        random_seed,
         )
   
   episode_duration = time.time() - episode_start_time
@@ -304,6 +312,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
   n_game_agents = []
   n_opponent_ids = []
   n_opponent_id_names = []
+  n_random_seeds = []
   for i in range(num_games):
     game_agent_paths, game_agents, opponent_ids, opponent_id_names = (
       get_game_agents(this_agent, other_agents, opponent_names, num_agents,
@@ -321,20 +330,23 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     n_game_agents.append(game_agents)
     n_opponent_ids.append(opponent_ids)
     n_opponent_id_names.append(opponent_id_names)
+    n_random_seeds.append(np.random.randint(0, int(1e9)))
   
   if use_multiprocessing:
     with mp.Pool(processes=mp.cpu_count()-1) as pool:
       results = [pool.apply_async(
                   collect_experience_single_game, args=(
-                    gap, ga, num_agents, verbose, g,)) for gap, ga, g in zip(
-                      n_game_agent_paths, n_game_agents, np.arange(num_games))]
+                    gap, ga, num_agents, verbose, g, rs,)) for (
+                      gap, ga, g, rs) in zip(
+                      n_game_agent_paths, n_game_agents, np.arange(num_games),
+                      n_random_seeds)]
       game_outputs = [p.get() for p in results]
   else:
     game_outputs = []
     for game_id in range(num_games):
       single_game_outputs = collect_experience_single_game(
-          n_game_agent_paths[game_id],  n_game_agents[game_id], num_agents,
-          verbose, game_id)
+          n_game_agent_paths[game_id], n_game_agents[game_id], num_agents,
+          verbose, game_id, n_random_seeds[game_id])
       game_outputs.append(single_game_outputs)
     
   (n_this_game_data, n_episode_duration) = list(
