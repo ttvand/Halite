@@ -9,7 +9,6 @@ import random
 import rule_utils
 import time
 import utils
-
 ExperienceGame = recordtype('ExperienceGame', [
   'game_id',
   'game_agent_paths',
@@ -26,6 +25,7 @@ ExperienceGame = recordtype('ExperienceGame', [
   'total_halite_spent',
   'opponent_names',
   'random_seed',
+  'first_agent_step_details',
   ])
 
 
@@ -158,6 +158,22 @@ def get_base_and_ship_counts(env):
   
   return terminal_base_counts, terminal_ship_counts
 
+def update_terminal_halite_scores(num_agents, halite_scores, episode_step,
+                                  max_episode_steps, env):
+  for i in range(num_agents):
+    agent_status = env.state[i].status
+    valid_agent = (halite_scores[episode_step-1, i] >= 0) and (
+      episode_step == (max_episode_steps-1) or (
+        agent_status not in ['INVALID', 'TIMEOUT']))
+    if valid_agent:
+      halite_scores[episode_step, i] = env.state[0].observation.players[i][0]
+    else:
+      halite_scores[episode_step, i] = -1
+  
+  halite_scores = halite_scores[:(episode_step+1)]
+  
+  return halite_scores
+
 def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
                                    verbose, game_id, random_seed):
   episode_start_time = time.time()
@@ -171,7 +187,9 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
   config_game_agents = [a if isinstance(a, dict) else "text_agent" for a in (
     game_agents)]
   
-  env = make_environment('halite')
+  env = make_environment('halite',
+                          configuration = {"randomSeed": random_seed}
+                         )
   env.reset(num_agents=num_agents)
   max_episode_steps = env.configuration.episodeSteps
   halite_scores = np.full((max_episode_steps, num_agents), np.nan)
@@ -231,17 +249,24 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
     
     episode_step += 1
     
+  # Write the terminal halite scores
+  halite_scores = update_terminal_halite_scores(
+    num_agents, halite_scores, episode_step, max_episode_steps, env)
+    
   # Evaluate why the game evolved as it did
+  # import pdb; pdb.set_trace()
   vals_5000 = np.where(halite_scores[:, 0] == 5000)[0]
   last_5000 = vals_5000[vals_5000 < 10][-1]
-  first_zero = np.where(halite_scores[:, 0] == 0)[0][0]
+  if not np.any(halite_scores[:, 0] == 0):
+    first_zero = 0
+  else:
+    first_zero = np.where(halite_scores[:, 0] == 0)[0][0]
   if first_zero - last_5000 != 10:
     print("Error random seed: {}".format(random_seed))
     import pdb; pdb.set_trace()
     x = 1
     
   # Obtain the terminal rewards for all agents
-  halite_scores = halite_scores[:episode_step]
   episode_rewards = get_episode_rewards(halite_scores)
   
   # Obtain the terminal number of ships and bases for all agents
@@ -265,6 +290,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
         total_halite_spent,
         None, # Opponent names added outside of this function
         random_seed,
+        first_agent_step_details,
         )
   
   episode_duration = time.time() - episode_start_time

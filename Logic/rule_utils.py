@@ -7,6 +7,7 @@ import numpy as np
 import os
 import pandas as pd
 from pathlib import Path
+import random
 from scipy import signal
 from scipy import stats
 import seaborn as sns
@@ -64,6 +65,8 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Self play rule_actions_v2 optimum 3 additional rules 5': 2,
     'Self play rule_actions_v2 optimum 3 additional rules 5 stochastic': 5,
     'Self play rule_actions_v2 optimum 4': 2,
+    'Self play rule_actions_v2 optimum 4 additional rules 1': 2,
+    'Self play rule_actions_v2 optimum 4 additional rules 2 deterministic': 2,
     # 'Greedy - many spawns and conversions': 2,
     # 'Run yard one ship': 1,
     # 'Self play optimum 1': 2,
@@ -459,10 +462,16 @@ def fixed_pool_sample_probs(opponent_names):
   return sample_probs/sample_probs.sum()
 
 def record_videos(agent_path, num_agents_per_game, extension_override=None,
-                  config_override_agents=None):
+                  config_override_agents=None, deterministic_games=False,
+                  random_seed_deterministic=0):
   print("Generating videos of iteration {}".format(agent_path))
+  env_configuration = {"agentExec": "LOCAL"}
+  if deterministic_games:
+    np.random.seed(random_seed_deterministic)
+    random.seed(random_seed_deterministic)
+    env_configuration["randomSeed"] = 0
   env = make_environment(
-    "halite", configuration={"agentExec": "LOCAL"})#, configuration={"agentTimeout": 10000, "actTimeout": 10000})
+    "halite", configuration=env_configuration)#, configuration={"agentTimeout": 10000, "actTimeout": 10000})
   config = load_configs([agent_path])[0]
   env_configuration = env.configuration
   

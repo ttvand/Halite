@@ -8,12 +8,14 @@ from skopt import Optimizer
 import utils
 
 # Make sure the data is deterministic
+deterministic_games = True
 import numpy as np
 import random
-np.random.seed(0)
-random.seed(0)
+if deterministic_games:
+  np.random.seed(0)
+  random.seed(0)
 
-NUM_GAMES = 50
+NUM_GAMES = 2
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -24,10 +26,11 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': True,
+  'use_multiprocessing': False,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
+  'deterministic_games': deterministic_games,
   
   'num_agents_per_game': 4,
   'pool_name': 'Rule based with evolution VI',
@@ -35,6 +38,8 @@ config = {
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
   # 'initial_config_ranges':{
+  #   'fixed_action_seed': ((0, 1), "int", 1), # Makes actions deterministic
+    
   #   'halite_config_setting_divisor': ((1.0, 1.0+1e-10), "float", 0),
   #   'min_spawns_after_conversions': ((0, 2), "int", 0),
   #   'collect_smoothed_multiplier': ((0.0, 0.2), "float", 0),
@@ -60,18 +65,21 @@ config = {
   #   'return_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
   
   #   'establish_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  #   'two_step_avoid_boxed_enemy_multiplier': ((0.0, 60.0), "float", 0),
   #   'ignore_catch_prob': ((0.3, 0.5), "float", 0),
   #   'max_ships': ((15, 25), "int", 1),
   #   'max_spawns_per_step': ((1, 4), "int", 1),
-  #   'nearby_ship_halite_spawn_constant': ((0.5, 3.0), "float", 0),
   
+  #   'nearby_ship_halite_spawn_constant': ((0.5, 3.0), "float", 0),
   #   'nearby_halite_spawn_constant': ((5.0, 20.0), "float", 0),
   #   'remaining_budget_spawn_constant': ((0.1, 0.3), "float", 0),
   #   'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
   #   'max_spawn_relative_step_divisor': ((100.0, 400.0), "float", 1),
   #   }
   
-  'initial_config_ranges':{
+  'initial_config_ranges': {
+    'fixed_action_seed': int(deterministic_games),
+    
     'halite_config_setting_divisor': 1.0,
     'min_spawns_after_conversions': 1,
     'collect_smoothed_multiplier': 0.1,
@@ -97,11 +105,12 @@ config = {
     'return_base_catch_enemy_multiplier': 1.0,
     
     'establish_base_catch_enemy_multiplier': 0.5,
+    'two_step_avoid_boxed_enemy_multiplier': 30.0,
     'ignore_catch_prob': 0.5,
     'max_ships': 20,
     'max_spawns_per_step': 3,
-    'nearby_ship_halite_spawn_constant': 2.0,
     
+    'nearby_ship_halite_spawn_constant': 2.0,
     'nearby_halite_spawn_constant': 10.0,
     'remaining_budget_spawn_constant': 0.2,
     'spawn_score_threshold': 50.0,
@@ -203,11 +212,14 @@ def main_rule_utils(config):
           plot_name_suffix="config setting average win rate", all_scatter=True)
       
       # Select the next hyperparameters to try
-      next_fixed_opponent_suggested, next_fixed_opponent_configs = (
-        rule_utils.get_next_config_settings(
-          opt, config_keys, config['num_games_fixed_opponents_pool'],
-          fixed_opp_repeats, config['initial_config_ranges'])
-        )
+      try:
+        next_fixed_opponent_suggested, next_fixed_opponent_configs = (
+          rule_utils.get_next_config_settings(
+            opt, config_keys, config['num_games_fixed_opponents_pool'],
+            fixed_opp_repeats, config['initial_config_ranges'])
+          )
+      except:
+        import pdb; pdb.set_trace()
          
     # Section 3: play games against a fixed opponents pool
     if config['num_games_fixed_opponents_pool']:
@@ -227,8 +239,9 @@ def main_rule_utils(config):
            first_config_overrides=next_fixed_opponent_configs,
            )
          )
-      # experience_buffer.add(evaluation_experience)
+      experience_buffer.add(fixed_opponents_experience)
          
+    import pdb; pdb.set_trace()
     # Select the values that will be used to determine if a next iteration file
     # will be created
     serialized_raw_experience = fixed_opponents_experience if (
@@ -256,7 +269,9 @@ def main_rule_utils(config):
       rule_utils.record_videos(
         rules_config_path, config['num_agents_per_game'],
         extension_override=str(datetime.now())[:19],
-        config_override_agents=config_override_agents)
+        config_override_agents=config_override_agents,
+        random_seed_deterministic=fixed_opponents_experience[0].random_seed,
+        deterministic_games=config['deterministic_games'])
     else:
       # Save a new iteration if it has significantly improved
       data_rules_path = rules_config_path
@@ -269,15 +284,15 @@ def main_rule_utils(config):
         rules_config_path = incremented_rules_path
         
         if config['record_videos_new_iteration']:
-          rule_utils.record_videos(original_rules_config_path,
-                                   config['num_agents_per_game'],
-                                   )
+          rule_utils.record_videos(
+            original_rules_config_path, config['num_agents_per_game'])
       elif config['record_videos_each_main_loop']:
-        rule_utils.record_videos(rules_config_path,
-                                 config['num_agents_per_game'],
-                                 str(datetime.now())[:19])
+        rule_utils.record_videos(
+          rules_config_path, config['num_agents_per_game'],
+          str(datetime.now())[:19])
         
       # Record learning progress
+      import pdb; pdb.set_trace()
       rule_utils.update_learning_progress(config['pool_name'], {
         'Time stamp': str(datetime.now()),
         'Average reward self play': avg_reward_sp,

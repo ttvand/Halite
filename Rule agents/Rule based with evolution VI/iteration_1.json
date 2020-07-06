@@ -1,4 +1,5 @@
 {
+    "fixed_action_seed": 1,
     "halite_config_setting_divisor": 1.0,
     "min_spawns_after_conversions": 1,
     "collect_smoothed_multiplier": 0.1,
@@ -20,6 +21,7 @@
     "collect_catch_enemy_multiplier": 0.5,
     "return_base_catch_enemy_multiplier": 1.0,
     "establish_base_catch_enemy_multiplier": 0.5,
+    "two_step_avoid_boxed_enemy_multiplier": 30.0,
     "ignore_catch_prob": 0.5,
     "max_ships": 20,
     "max_spawns_per_step": 3,
