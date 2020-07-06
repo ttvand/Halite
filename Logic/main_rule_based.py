@@ -8,14 +8,14 @@ from skopt import Optimizer
 import utils
 
 # Make sure the data is deterministic
-deterministic_games = True
+deterministic_games = True  # This should probably only be used for debugging
 import numpy as np
 import random
 if deterministic_games:
   np.random.seed(0)
   random.seed(0)
 
-NUM_GAMES = 2
+NUM_GAMES = 1
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -38,8 +38,6 @@ config = {
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
   # 'initial_config_ranges':{
-  #   'fixed_action_seed': ((0, 1), "int", 1), # Makes actions deterministic
-    
   #   'halite_config_setting_divisor': ((1.0, 1.0+1e-10), "float", 0),
   #   'min_spawns_after_conversions': ((0, 2), "int", 0),
   #   'collect_smoothed_multiplier': ((0.0, 0.2), "float", 0),
@@ -78,8 +76,6 @@ config = {
   #   }
   
   'initial_config_ranges': {
-    'fixed_action_seed': int(deterministic_games),
-    
     'halite_config_setting_divisor': 1.0,
     'min_spawns_after_conversions': 1,
     'collect_smoothed_multiplier': 0.1,
@@ -171,6 +167,7 @@ def main_rule_utils(config):
           max_pool_size=config['max_pool_size'],
           num_agents=config['num_agents_per_game'],
           exclude_current_from_opponents=False,
+          fixed_action_seed=deterministic_games,
           record_videos_new_iteration=config['record_videos_new_iteration'],
           initial_config_ranges=config['initial_config_ranges'],
           use_multiprocessing=config['use_multiprocessing'],
@@ -187,6 +184,7 @@ def main_rule_utils(config):
           max_pool_size=2,
           num_agents=config['num_agents_per_game'],
           exclude_current_from_opponents=True,
+          fixed_action_seed=deterministic_games,
           use_multiprocessing=config['use_multiprocessing'],
           )
       # experience_buffer.add(evaluation_experience)
@@ -232,6 +230,7 @@ def main_rule_utils(config):
            max_pool_size=1, # Any positive integer is fine
            num_agents=config['num_agents_per_game'],
            exclude_current_from_opponents=False,
+           fixed_action_seed=deterministic_games,
            fixed_opponent_pool=True,
            initial_config_ranges=config['initial_config_ranges'],
            use_multiprocessing=config['use_multiprocessing'],
@@ -241,7 +240,7 @@ def main_rule_utils(config):
          )
       experience_buffer.add(fixed_opponents_experience)
          
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     # Select the values that will be used to determine if a next iteration file
     # will be created
     serialized_raw_experience = fixed_opponents_experience if (
@@ -267,7 +266,7 @@ def main_rule_utils(config):
       config_override_agents = (
         fixed_opponents_experience[-1].config_game_agents)
       rule_utils.record_videos(
-        rules_config_path, config['num_agents_per_game'],
+        rules_config_path, config['num_agents_per_game'], deterministic_games,
         extension_override=str(datetime.now())[:19],
         config_override_agents=config_override_agents,
         random_seed_deterministic=fixed_opponents_experience[0].random_seed,

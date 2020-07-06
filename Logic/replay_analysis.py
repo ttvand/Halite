@@ -49,11 +49,12 @@ initial_config = {
     'return_base_catch_enemy_multiplier': 1.0,
     
     'establish_base_catch_enemy_multiplier': 0.5,
+    'two_step_avoid_boxed_enemy_multiplier': 30.0,
     'ignore_catch_prob': 0.5,
     'max_ships': 20,
     'max_spawns_per_step': 3,
-    'nearby_ship_halite_spawn_constant': 2.0,
     
+    'nearby_ship_halite_spawn_constant': 2.0,
     'nearby_halite_spawn_constant': 10.0,
     'remaining_budget_spawn_constant': 0.2,
     'spawn_score_threshold': 50.0,
@@ -248,7 +249,8 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
                 mapped_actions, _, step_details = (
                   rule_utils.get_config_or_callable_actions(
                     game_agent, prev_obs, prev_units_obs,
-                    prev_env_observation, env_configuration))
+                    prev_env_observation, env_configuration,
+                    fixed_action_seed=True))
                 # import pdb; pdb.set_trace()
                 
                 ship_non_boxed_loss_counterfactual += (
@@ -259,7 +261,7 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
       mapped_actions, _, step_details = (
         rule_utils.get_config_or_callable_actions(
           game_agent, prev_obs, prev_units_obs, prev_env_observation,
-          env_configuration))
+          env_configuration, fixed_action_seed=True))
       
       all_counterfactual_ship_loss += (
         ship_loss_count_counterfact(mapped_actions, prev_units_obs, obs))

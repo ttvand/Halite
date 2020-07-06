@@ -3,9 +3,8 @@ import copy
 import numpy as np
 from scipy import signal
 
+FIXED_ACTION_SEED = 1
 CONFIG = {
-  'fixed_action_seed': 1,
-  
   'halite_config_setting_divisor': 1.0,
   'min_spawns_after_conversions': 1,
   'collect_smoothed_multiplier': 0.1,
@@ -332,7 +331,7 @@ def update_scores_enemy_ships(
         # chasing me - risk avoiding policy for now: if there is at least
         # one ship in a direction that has less halite, I should avoid it
         distance_multiplier = 1/halite_diff_dist[1]
-        mask_collect_return = HALF_PLANES_CATCH[(row, col)][direction]
+        mask_collect_return = np.copy(HALF_PLANES_CATCH[(row, col)][direction])
         collect_grid_scores -= mask_collect_return*halite_diff*(
           config['collect_catch_enemy_multiplier'])*distance_multiplier
         return_to_base_scores -= mask_collect_return*halite_diff*(
@@ -1057,8 +1056,9 @@ def decide_existing_base_spawns(
       
   return mapped_actions, remaining_budget
 
-def get_numpy_random_generator(config, observation, print_seed=False):
-  if config['fixed_action_seed']:
+def get_numpy_random_generator(
+    config, observation, fixed_action_seed, print_seed=False):
+  if fixed_action_seed:
     rng_seed = 0
   else:
     rng_seed = np.random.randint(1e9)
@@ -1068,9 +1068,10 @@ def get_numpy_random_generator(config, observation, print_seed=False):
   return np.random.RandomState(rng_seed)
 
 def get_config_actions(config, observation, player_obs, env_config,
-                       verbose=False):
+                       fixed_action_seed, verbose=False):
   # Optionally set the random seed
-  np_rng = get_numpy_random_generator(config, observation, print_seed=True)
+  np_rng = get_numpy_random_generator(
+    config, observation, fixed_action_seed, print_seed=True)
   
   # Compute the ship scores for all high level actions
   ship_scores = get_ship_scores(config, observation, player_obs, env_config,
@@ -1156,6 +1157,6 @@ def my_agent(observation, env_config):
   player_obs = observation.players[active_id]
   
   mapped_actions, _ = get_config_actions(
-    CONFIG, current_observation, player_obs, env_config)
+    CONFIG, current_observation, player_obs, env_config, FIXED_ACTION_SEED)
      
   return mapped_actions

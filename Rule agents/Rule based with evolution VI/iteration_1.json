@@ -1,5 +1,4 @@
 {
-    "fixed_action_seed": 1,
     "halite_config_setting_divisor": 1.0,
     "min_spawns_after_conversions": 1,
     "collect_smoothed_multiplier": 0.1,

@@ -25,7 +25,7 @@ ExperienceGame = recordtype('ExperienceGame', [
   'total_halite_spent',
   'opponent_names',
   'random_seed',
-  'first_agent_step_details',
+  # 'first_agent_step_details',
   ])
 
 
@@ -175,7 +175,8 @@ def update_terminal_halite_scores(num_agents, halite_scores, episode_step,
   return halite_scores
 
 def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
-                                   verbose, game_id, random_seed):
+                                   verbose, game_id, random_seed,
+                                   fixed_action_seed):
   episode_start_time = time.time()
   
   # Generate reproducible data for better debugging
@@ -223,7 +224,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
         mapped_actions, halite_spent, step_details = (
           rule_utils.get_config_or_callable_actions(
             game_agents[active_id], current_observation, player_obs,
-            env_observation, env.configuration))
+            env_observation, env.configuration, fixed_action_seed))
         ship_counts[current_observation['step'], active_id] = len(player_obs[2])
         if active_id == 0:
           first_agent_step_details.append(step_details)
@@ -254,7 +255,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
     num_agents, halite_scores, episode_step, max_episode_steps, env)
     
   # Evaluate why the game evolved as it did
-  # import pdb; pdb.set_trace()
+  import pdb; pdb.set_trace()
   vals_5000 = np.where(halite_scores[:, 0] == 5000)[0]
   last_5000 = vals_5000[vals_5000 < 10][-1]
   if not np.any(halite_scores[:, 0] == 0):
@@ -290,7 +291,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
         total_halite_spent,
         None, # Opponent names added outside of this function
         random_seed,
-        first_agent_step_details,
+        # first_agent_step_details,
         )
   
   episode_duration = time.time() - episode_start_time
@@ -302,9 +303,9 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
 # A fixed number of games is played in each iteration and the opponent and
 # starting player is randomly selected in each game.
 def play_games(pool_name, num_games, max_pool_size, num_agents,
-               exclude_current_from_opponents, fixed_opponent_pool=False,
-               initial_config_ranges=None, verbose=False,
-               record_videos_new_iteration=False,
+               exclude_current_from_opponents, fixed_action_seed,
+               fixed_opponent_pool=False, initial_config_ranges=None,
+               verbose=False, record_videos_new_iteration=False,
                max_pool_size_exclude_current_from_opponent=5,
                use_multiprocessing=False, num_repeat_first_configs=1,
                first_config_overrides=None):
@@ -362,8 +363,8 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     with mp.Pool(processes=mp.cpu_count()-1) as pool:
       results = [pool.apply_async(
                   collect_experience_single_game, args=(
-                    gap, ga, num_agents, verbose, g, rs,)) for (
-                      gap, ga, g, rs) in zip(
+                    gap, ga, num_agents, verbose, g, rs,
+                    fixed_action_seed)) for (gap, ga, g, rs) in zip(
                       n_game_agent_paths, n_game_agents, np.arange(num_games),
                       n_random_seeds)]
       game_outputs = [p.get() for p in results]
@@ -372,7 +373,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     for game_id in range(num_games):
       single_game_outputs = collect_experience_single_game(
           n_game_agent_paths[game_id], n_game_agents[game_id], num_agents,
-          verbose, game_id, n_random_seeds[game_id])
+          verbose, game_id, n_random_seeds[game_id], fixed_action_seed)
       game_outputs.append(single_game_outputs)
     
   (n_this_game_data, n_episode_duration) = list(
