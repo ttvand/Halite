@@ -284,9 +284,11 @@ stable_opponents_folder = os.path.join(
   this_folder, '../Rule agents/Stable opponents pool')
 agent_files = [f for f in os.listdir(stable_opponents_folder) if (
       f[-3:] == '.py')]
-game_agent = [rule_utils.sample_from_config_or_path(os.path.join(
+game_agent = [
+  rule_utils.sample_from_config_or_path(os.path.join(
   stable_opponents_folder, agent_files[-1]), return_callable=True),
-  initial_config][1]
+  initial_config][
+    1]
 destroyed_conversion_losses = np.zeros((num_replays, 4))
 boxed_ship_losses = np.zeros((num_replays, 4))
 shipyard_collision_losses = np.zeros((num_replays, 4))
