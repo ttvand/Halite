@@ -978,21 +978,20 @@ def decide_existing_base_spawns(
   return mapped_actions, remaining_budget
 
 def get_numpy_random_generator(
-    config, observation, fixed_action_seed, print_seed=False):
-  if fixed_action_seed:
-    rng_seed = 0
-  else:
-    rng_seed = np.random.randint(1e9)
+    config, observation, rng_action_seed, print_seed=False):
+  if rng_action_seed is None:
+    rng_action_seed = 0
   
   if observation['step'] == 0 and print_seed:
-    print("Random seed: {}".format(rng_seed))
-  return np.random.RandomState(rng_seed)
+    print("Random acting seed: {}".format(rng_action_seed))
+    
+  return np.random.RandomState(rng_action_seed)
 
 def get_config_actions(config, observation, player_obs, env_config,
-                       fixed_action_seed, verbose=False):
+                       rng_action_seed, verbose=False):
   # Optionally set the random seed
   np_rng = get_numpy_random_generator(
-    config, observation, fixed_action_seed, print_seed=True)
+    config, observation, rng_action_seed, print_seed=True)
   
   # Compute the ship scores for all high level actions
   ship_scores = get_ship_scores(config, observation, player_obs, env_config,

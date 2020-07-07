@@ -3,7 +3,6 @@ import copy
 import numpy as np
 from scipy import signal
 
-FIXED_ACTION_SEED = 0
 CONFIG = {
   'halite_config_setting_divisor': 1.0,
   'min_spawns_after_conversions': 1,
@@ -1102,21 +1101,20 @@ def decide_existing_base_spawns(
   return mapped_actions, remaining_budget
 
 def get_numpy_random_generator(
-    config, observation, fixed_action_seed, print_seed=False):
-  if fixed_action_seed:
-    rng_seed = 0
-  else:
-    rng_seed = np.random.randint(1e9)
+    config, observation, rng_action_seed, print_seed=False):
+  if rng_action_seed is None:
+    rng_action_seed = 0
   
   if observation['step'] == 0 and print_seed:
-    print("Random seed: {}".format(rng_seed))
-  return np.random.RandomState(rng_seed)
+    print("Random acting seed: {}".format(rng_action_seed))
+    
+  return np.random.RandomState(rng_action_seed)
 
 def get_config_actions(config, observation, player_obs, env_config,
-                       fixed_action_seed, verbose=False):
-  # Optionally set the random seed
+                       rng_action_seed, verbose=False):
+  # Set the random seed
   np_rng = get_numpy_random_generator(
-    config, observation, fixed_action_seed, print_seed=True)
+    config, observation, rng_action_seed, print_seed=True)
   
   # Compute the ship scores for all high level actions
   ship_scores = get_ship_scores(config, observation, player_obs, env_config,
@@ -1196,12 +1194,13 @@ for k in CONFIG:
   if k in HALITE_MULTIPLIER_CONFIG_ENTRIES:
     CONFIG[k] /= CONFIG['halite_config_setting_divisor']
 
-def my_agent(observation, env_config):
+def my_agent(observation, env_config, **kwargs):
+  rng_action_seed = kwargs['rng_action_seed']
   active_id = observation.player
   current_observation = structured_env_obs(env_config, observation, active_id)
   player_obs = observation.players[active_id]
   
   mapped_actions, _ = get_config_actions(
-    CONFIG, current_observation, player_obs, env_config, FIXED_ACTION_SEED)
+    CONFIG, current_observation, player_obs, env_config, rng_action_seed)
      
   return mapped_actions

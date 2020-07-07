@@ -167,7 +167,6 @@ def main_rule_utils(config):
           max_pool_size=config['max_pool_size'],
           num_agents=config['num_agents_per_game'],
           exclude_current_from_opponents=False,
-          fixed_action_seed=deterministic_games,
           record_videos_new_iteration=config['record_videos_new_iteration'],
           initial_config_ranges=config['initial_config_ranges'],
           use_multiprocessing=config['use_multiprocessing'],
@@ -184,7 +183,6 @@ def main_rule_utils(config):
           max_pool_size=2,
           num_agents=config['num_agents_per_game'],
           exclude_current_from_opponents=True,
-          fixed_action_seed=deterministic_games,
           use_multiprocessing=config['use_multiprocessing'],
           )
       # experience_buffer.add(evaluation_experience)
@@ -230,7 +228,6 @@ def main_rule_utils(config):
            max_pool_size=1, # Any positive integer is fine
            num_agents=config['num_agents_per_game'],
            exclude_current_from_opponents=False,
-           fixed_action_seed=deterministic_games,
            fixed_opponent_pool=True,
            initial_config_ranges=config['initial_config_ranges'],
            use_multiprocessing=config['use_multiprocessing'],
@@ -265,11 +262,13 @@ def main_rule_utils(config):
 
       config_override_agents = (
         fixed_opponents_experience[-1].config_game_agents)
+      import pdb; pdb.set_trace()
       rule_utils.record_videos(
-        rules_config_path, config['num_agents_per_game'], deterministic_games,
+        rules_config_path, config['num_agents_per_game'],
         extension_override=str(datetime.now())[:19],
         config_override_agents=config_override_agents,
-        random_seed_deterministic=fixed_opponents_experience[0].random_seed,
+        env_seed_deterministic=fixed_opponents_experience[0].env_random_seed,
+        rng_action_seeds=fixed_opponents_experience[0].act_random_seeds,
         deterministic_games=config['deterministic_games'])
     else:
       # Save a new iteration if it has significantly improved
@@ -291,7 +290,7 @@ def main_rule_utils(config):
           str(datetime.now())[:19])
         
       # Record learning progress
-      import pdb; pdb.set_trace()
+      # import pdb; pdb.set_trace()
       rule_utils.update_learning_progress(config['pool_name'], {
         'Time stamp': str(datetime.now()),
         'Average reward self play': avg_reward_sp,

@@ -375,19 +375,20 @@ def add_warped_kernel(grid, kernel, row, col):
   return grid + addition
 
 def get_config_actions(config, observation, player_obs, env_config,
-                       fixed_action_seed, verbose=False, version_1=False):
+                       rng_action_seed, verbose=False, version_1=False):
   call_module = rule_actions_v1 if version_1 else rule_actions_v2
   return call_module.get_config_actions(
-    config, observation, player_obs, env_config, fixed_action_seed, verbose)
+    config, observation, player_obs, env_config, rng_action_seed, verbose)
 
 def get_config_or_callable_actions(config_or_callable, observation, player_obs,
                                    env_observation, env_config,
-                                   fixed_action_seed, verbose=False):
+                                   rng_action_seed, verbose=False):
   if isinstance(config_or_callable, dict):
     return get_config_actions(config_or_callable, observation, player_obs,
-                              env_config, fixed_action_seed, verbose)
+                              env_config, rng_action_seed, verbose)
   else:
-    mapped_actions = config_or_callable(env_observation, env_config)
+    kwargs = {'rng_action_seed': rng_action_seed}
+    mapped_actions = config_or_callable(env_observation, env_config, **kwargs)
     
     # Infer the amount of halite_spent from the actions
     halite_spent = 0
@@ -463,13 +464,13 @@ def fixed_pool_sample_probs(opponent_names):
     
   return sample_probs/sample_probs.sum()
 
-def record_videos(agent_path, num_agents_per_game, fixed_action_seed,
+def record_videos(agent_path, num_agents_per_game, rng_action_seeds,
                   extension_override=None, config_override_agents=None,
-                  deterministic_games=False, random_seed_deterministic=0):
+                  deterministic_games=False, env_seed_deterministic=0):
   print("Generating videos of iteration {}".format(agent_path))
   env_configuration = {"agentExec": "LOCAL"}
   if deterministic_games:
-    env_configuration["randomSeed"] = random_seed_deterministic
+    env_configuration["randomSeed"] = env_seed_deterministic
   env = make_environment(
     "halite", configuration=env_configuration)#, configuration={"agentTimeout": 10000, "actTimeout": 10000})
   config = load_configs([agent_path])[0]
@@ -477,6 +478,7 @@ def record_videos(agent_path, num_agents_per_game, fixed_action_seed,
   
   def my_agent(observation, config_id):
     config = AGENT_CONFIGS[config_id]
+    rng_action_seed = rng_action_seeds[config_id]
     active_id = observation.player
     current_observation = utils.structured_env_obs(
       env_configuration, observation, active_id)
@@ -484,7 +486,7 @@ def record_videos(agent_path, num_agents_per_game, fixed_action_seed,
     
     mapped_actions, _, _ = get_config_or_callable_actions(
       config, current_observation, player_obs, observation, env_configuration,
-      fixed_action_seed)
+      rng_action_seed)
     
     return mapped_actions
   
