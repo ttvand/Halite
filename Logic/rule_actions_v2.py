@@ -141,7 +141,6 @@ def update_scores_enemy_ships(
     EAST: None,
     WEST: None,
     }
-  # TODO: incorporate gathered halite on None action
   for row_shift in range(-min_dist, min_dist+1):
     considered_row = (row + row_shift) % grid_size
     for col_shift in range(-min_dist, min_dist+1):
@@ -396,7 +395,6 @@ def get_nearest_base_distance(player_obs, grid_size):
   return base_nearest_distance
 
 def get_valid_opponent_ship_actions(rewards_bases_ships, halite_ships, size):
-  # TODO: incorporate gathered halite on None action
   valid_opponent_actions = {}
   num_agents = len(rewards_bases_ships)
   stacked_ships = np.stack([rbs[2] for rbs in rewards_bases_ships])
@@ -432,7 +430,7 @@ def get_valid_opponent_ship_actions(rewards_bases_ships, halite_ships, size):
       valid_opponent_actions[(row, col)] = valid_rel_directions
       
   return valid_opponent_actions
-                
+
 
 def get_ship_scores(config, observation, player_obs, env_config, np_rng,
                     verbose):
@@ -989,7 +987,7 @@ def get_numpy_random_generator(
 
 def get_config_actions(config, observation, player_obs, env_config,
                        rng_action_seed, verbose=False):
-  # Optionally set the random seed
+  # Set the random seed
   np_rng = get_numpy_random_generator(
     config, observation, rng_action_seed, print_seed=True)
   

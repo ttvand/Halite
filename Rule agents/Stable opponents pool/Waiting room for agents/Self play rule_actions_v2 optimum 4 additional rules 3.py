@@ -257,14 +257,13 @@ def update_scores_enemy_ships(
     config, collect_grid_scores, return_to_base_scores, establish_base_scores,
     opponent_ships, halite_ships, row, col, grid_size, spawn_cost,
     drop_None_valid, obs_halite, collect_rate, np_rng,
-    opponent_ships_sensible_actions, observation, min_dist=2):
+    opponent_ships_sensible_actions, min_dist=2):
   direction_halite_diff_distance={
     NORTH: None,
     SOUTH: None,
     EAST: None,
     WEST: None,
     }
-  # TODO: incorporate gathered halite on None action
   for row_shift in range(-min_dist, min_dist+1):
     considered_row = (row + row_shift) % grid_size
     for col_shift in range(-min_dist, min_dist+1):
@@ -369,21 +368,22 @@ def update_scores_enemy_ships(
         relative_other_pos = get_relative_position(
           move_row, move_col, other_row, other_col, grid_size)
         for diff_rel_row, diff_rel_col, other_gather in MOVE_GATHER_OPTIONS:
-          # TODO execution time permitting: only consider sensible opponent
-          # actions
-          is_threat = (not other_gather) or (my_next_halite > (
-            halite_ships[other_row, other_col] + int(collect_rate*obs_halite[
-              other_row, other_col])))
-          if is_threat:
-            other_rel_row = relative_other_pos[0] + diff_rel_row
-            other_rel_col = relative_other_pos[1] + diff_rel_col
-            move_diff = np.abs(other_rel_row) + np.abs(other_rel_col)
-            if move_diff < 3 and move_diff > 0:
-              threat_dirs = TWO_STEP_THREAT_DIRECTIONS[
-                (other_rel_row, other_rel_col)]
-              for threat_row_diff, threat_col_diff in threat_dirs:
-                all_dir_threat_counter[
-                  (threat_row_diff, threat_col_diff)] += 1
+          # Only consider sensible opponent actions
+          if (diff_rel_row, diff_rel_col) in opponent_ships_sensible_actions[
+              other_row, other_col]:
+            is_threat = (not other_gather) or (my_next_halite > (
+              halite_ships[other_row, other_col] + int(collect_rate*obs_halite[
+                other_row, other_col])))
+            if is_threat:
+              other_rel_row = relative_other_pos[0] + diff_rel_row
+              other_rel_col = relative_other_pos[1] + diff_rel_col
+              move_diff = np.abs(other_rel_row) + np.abs(other_rel_col)
+              if move_diff < 3 and move_diff > 0:
+                threat_dirs = TWO_STEP_THREAT_DIRECTIONS[
+                  (other_rel_row, other_rel_col)]
+                for threat_row_diff, threat_col_diff in threat_dirs:
+                  all_dir_threat_counter[
+                    (threat_row_diff, threat_col_diff)] += 1
       
       # Aggregate the threat count in all_dir_threat_counter
       threat_counts = np.array(list(all_dir_threat_counter.values()))
@@ -518,7 +518,6 @@ def get_nearest_base_distance(player_obs, grid_size):
   return base_nearest_distance
 
 def get_valid_opponent_ship_actions(rewards_bases_ships, halite_ships, size):
-  # TODO: incorporate gathered halite on None action
   valid_opponent_actions = {}
   num_agents = len(rewards_bases_ships)
   stacked_ships = np.stack([rbs[2] for rbs in rewards_bases_ships])
@@ -1195,7 +1194,7 @@ for k in CONFIG:
     CONFIG[k] /= CONFIG['halite_config_setting_divisor']
 
 def my_agent(observation, env_config, **kwargs):
-  rng_action_seed = kwargs['rng_action_seed']
+  rng_action_seed = kwargs.get('rng_action_seed', 0)
   active_id = observation.player
   current_observation = structured_env_obs(env_config, observation, active_id)
   player_obs = observation.players[active_id]
