@@ -291,7 +291,8 @@ def update_scores_enemy_ships(
 def update_scores_blockers(
     collect_grid_scores, return_to_base_scores, establish_base_scores,
     attack_base_scores, row, col, grid_size, blockers, valid_directions,
-    early_base_direct_dir=None, blocker_max_distance=half_distance_mask_dim):
+    early_base_direct_dir=None, blocker_max_distance=half_distance_mask_dim,
+    update_attack_base=True):
   for d in MOVE_DIRECTIONS[1:]:
     if d == NORTH:
       rows = np.mod(row - (1 + np.arange(blocker_max_distance)), grid_size)
@@ -321,7 +322,8 @@ def update_scores_blockers(
       collect_grid_scores[mask_rows, mask_cols] = -1e9
       return_to_base_scores[mask_rows, mask_cols] = -1e9
       establish_base_scores[mask_rows, mask_cols] = -1e9
-      attack_base_scores[mask_rows, mask_cols] = -1e9
+      if update_attack_base:
+        attack_base_scores[mask_rows, mask_cols] = -1e9
       
       if first_blocking_base_id == 0 and d in valid_directions:
         valid_directions.remove(d)
@@ -471,7 +473,9 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   can_deposit_halite = my_bases.sum() > 0
   opponent_ships = np.stack([
     rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
-  all_ship_count = opponent_ships.sum() + len(player_obs[2])
+  my_ship_count = len(player_obs[2])
+  all_ship_count = opponent_ships.sum() + my_ship_count
+  my_ship_fraction = my_ship_count/(1e-9+all_ship_count)
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
   enemy_bases = np.stack([rbs[1] for rbs in observation[
@@ -552,7 +556,8 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
       config['attack_base_less_halite_ships_multiplier_base'] ** (
           opponent_smoother_less_halite_ships)) - (config[
             'attack_base_halite_sum_multiplier'] * obs_halite.sum() / (
-              all_ship_count)) - 1e9*(ship_halite > 0)
+              all_ship_count))*int(my_ship_fraction < 0.5) - 1e9*(
+                ship_halite > 0)
 
     # Update the scores as a function of nearby enemy ships to avoid collisions
     # with opposing ships that carry less halite and promote collisions with
@@ -571,7 +576,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
      attack_base_scores, valid_directions) = update_scores_blockers(
        collect_grid_scores, return_to_base_scores, establish_base_scores,
        attack_base_scores, row, col, grid_size, enemy_bases, valid_directions,
-       early_next_base_dir)
+       early_next_base_dir, update_attack_base=False)
             
     if last_episode_turn:
       # Convert all ships with more halite than the convert cost on the last
@@ -665,7 +670,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         if sq.sum():
           (s0, s1, s2, s3, s6) = update_scores_blockers(
             ship_scores[0], ship_scores[1], ship_scores[2], ship_scores[3],
-            row, col, grid_size, sq, valid_directions, blocker_max_distance=d)
+            row, col, grid_size, sq, valid_directions, blocker_max_distance=d,
+            update_attack_base=True)
           ship_scores = (s0, s1, s2, s3, ship_scores[4], ship_scores[5], s6,
                          ship_scores[7])
       
@@ -806,6 +812,7 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
     row, col = utils.row_col_from_square_grid_pos(
       player_obs[2][ship_k][0], grid_size)
     valid_actions = []
+    
     if not isinstance(ship_plans[ship_k], str):
       target_row, target_col, preferred_directions, ignore_base_collision = (
         ship_plans[ship_k])
@@ -832,6 +839,7 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
     row, col = utils.row_col_from_square_grid_pos(
       player_obs[2][ship_k][0], grid_size)
     has_selected_action = False
+    
     if isinstance(ship_plans[ship_k], str):
       # TODO: verify this is not buggy when the opponent has destroyed one of
       # my bases and there are no bases left

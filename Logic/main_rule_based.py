@@ -56,7 +56,7 @@ config = {
   #   'establish_base_deposit_multiplier': ((0.5, 1.0), "float", 0),
   #   'establish_base_less_halite_ships_multiplier_base': ((0.9, 1.0), "float", 0),
   
-  #   'attack_base_multiplier': ((0.0, 200.0), "float", 0),
+  #   'attack_base_multiplier': ((0.0, 500.0), "float", 0),
   #   'attack_base_less_halite_ships_multiplier_base': ((0.8, 1.0), "float", 0),
   #   'attack_base_halite_sum_multiplier': ((0.1, 2.0), "float", 0),
   #   'attack_base_run_enemy_multiplier': ((0.1, 2.0), "float", 0),
@@ -100,7 +100,7 @@ config = {
     'establish_base_deposit_multiplier': 0.8,
     'establish_base_less_halite_ships_multiplier_base': 1.0,
     
-    'attack_base_multiplier': 100.0,
+    'attack_base_multiplier': 200.0,
     'attack_base_less_halite_ships_multiplier_base': 0.9,
     'attack_base_halite_sum_multiplier': 1.0,
     'attack_base_run_enemy_multiplier': 1.0,
@@ -115,7 +115,7 @@ config = {
     'establish_base_catch_enemy_multiplier': 0.5,
     'two_step_avoid_boxed_enemy_multiplier': 30.0,
     'ignore_catch_prob': 0.5,
-    'max_ships': 20,
+    'max_ships': 10*20,
     'max_spawns_per_step': 3,
     
     'nearby_ship_halite_spawn_constant': 2.0,
