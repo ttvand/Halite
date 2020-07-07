@@ -56,6 +56,12 @@ config = {
   #   'establish_base_deposit_multiplier': ((0.5, 1.0), "float", 0),
   #   'establish_base_less_halite_ships_multiplier_base': ((0.9, 1.0), "float", 0),
   
+  #   'attack_base_multiplier': ((0.0, 200.0), "float", 0),
+  #   'attack_base_less_halite_ships_multiplier_base': ((0.8, 1.0), "float", 0),
+  #   'attack_base_halite_sum_multiplier': ((0.1, 2.0), "float", 0),
+  #   'attack_base_run_enemy_multiplier': ((0.1, 2.0), "float", 0),
+  #   'attack_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  
   #   'collect_run_enemy_multiplier': ((5.0, 15.0), "float", 0),
   #   'return_base_run_enemy_multiplier': ((1.0, 3.0), "float", 0),
   #   'establish_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
@@ -93,6 +99,12 @@ config = {
     'establish_first_base_smoothed_multiplier_correction': 1.5,
     'establish_base_deposit_multiplier': 0.8,
     'establish_base_less_halite_ships_multiplier_base': 1.0,
+    
+    'attack_base_multiplier': 100.0,
+    'attack_base_less_halite_ships_multiplier_base': 0.9,
+    'attack_base_halite_sum_multiplier': 1.0,
+    'attack_base_run_enemy_multiplier': 1.0,
+    'attack_base_catch_enemy_multiplier': 1.0,
     
     'collect_run_enemy_multiplier': 10.0,
     'return_base_run_enemy_multiplier': 2.0,
@@ -262,7 +274,6 @@ def main_rule_utils(config):
 
       config_override_agents = (
         fixed_opponents_experience[-1].config_game_agents)
-      import pdb; pdb.set_trace()
       rule_utils.record_videos(
         rules_config_path, config['num_agents_per_game'],
         extension_override=str(datetime.now())[:19],
