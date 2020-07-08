@@ -8,12 +8,10 @@ from skopt import Optimizer
 import utils
 
 # Make sure the data is deterministic
-deterministic_games = True  # This should probably only be used for debugging
+deterministic_games = True
 import numpy as np
 import random
-if deterministic_games:
-  np.random.seed(0)
-  random.seed(0)
+MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = {
@@ -127,7 +125,11 @@ config = {
   }
 CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"
 
-def main_rule_utils(config):
+def main_rule_utils(config, main_loop_seed=MAIN_LOOP_INITIAL_SEED):
+  if deterministic_games:
+    np.random.seed(main_loop_seed)
+    random.seed(main_loop_seed)
+  
   rule_utils.store_config_on_first_run(config)
   experience_buffer = utils.ExperienceBuffer(config['max_experience_buffer'])
   config_keys = list(config['initial_config_ranges'].keys())
@@ -280,7 +282,8 @@ def main_rule_utils(config):
         config_override_agents=config_override_agents,
         env_seed_deterministic=fixed_opponents_experience[0].env_random_seed,
         rng_action_seeds=fixed_opponents_experience[0].act_random_seeds,
-        deterministic_games=config['deterministic_games'])
+        deterministic_games=config['deterministic_games'],
+        deterministic_extension=f" - Seed {main_loop_seed}")
     else:
       # Save a new iteration if it has significantly improved
       data_rules_path = rules_config_path
@@ -325,5 +328,7 @@ def main_rule_utils(config):
         rule_utils.plot_reward_versus_features(
           experience_features_rewards_path, iteration_config_rewards,
           plot_name_suffix=str(datetime.now())[:19])
+        
+    main_loop_seed += 1
     
 main_rule_utils(config)

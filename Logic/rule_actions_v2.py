@@ -524,6 +524,9 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
     else:
       early_next_base_dir = None
       drop_None_valid = False
+      
+    # TODO: send the first N ships to the center by default in the first K
+    # episode steps (?)
     
     # Scores 2: returning to any of my bases
     base_return_grid_multiplier = dm*ship_halite*(
@@ -558,7 +561,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
             'attack_base_halite_sum_multiplier'] * obs_halite.sum() / (
               all_ship_count))*int(my_ship_fraction < 0.5) - 1e9*(
                 ship_halite > 0)
-
+                
     # Update the scores as a function of nearby enemy ships to avoid collisions
     # with opposing ships that carry less halite and promote collisions with
     # enemy ships that carry less halite
@@ -875,10 +878,10 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
       for a in shortest_actions:
         move_row, move_col = rule_utils.move_ship_row_col(
           row, col, a, grid_size)
-        if (not bad_positions[move_row, move_col] or (
-            ignore_base_collision and (
-              move_row == target_row and move_col == target_col))) and (
-                a in ship_scores[ship_k][6]):
+        if (not bad_positions[move_row, move_col] and (
+                a in ship_scores[ship_k][6])) or (
+                  ignore_base_collision and (
+                    move_row == target_row and move_col == target_col)):
           valid_actions.append(a)
       if valid_actions:
         if preferred_directions:
@@ -888,6 +891,11 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
             preferred_directions))
           if intersect_directions:
             valid_actions = intersect_directions
+        # TODO: if two actions are optimal, pick the one that moves into a
+        # region with less other ships and prefer actions that lead to more
+        # future options (e.g. prefer to move diagonally towards the base (?))
+        # This is probably bad near the base since the current behavior makes
+        # it hard to attack.
         action = str(np_rng.choice(valid_actions))
         action = None if action == 'None' else action
       else:
@@ -898,10 +906,16 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
           if a in ship_scores[ship_k][6]:
             move_row, move_col = rule_utils.move_ship_row_col(
                 row, col, a, grid_size)
-            if (not bad_positions[move_row, move_col]) or (
-                ignore_base_collision and (
-                  move_row == target_row and move_col == target_col)):
+            if not bad_positions[move_row, move_col]:
               valid_not_bad_actions.append(a)
+              
+        # When attacking a base it is better to keep moving or stay still on
+        # a square that has no halite - otherwise it becomes a target for
+        # stealing halite.
+        if valid_not_bad_actions and ignore_base_collision and obs_halite[
+            row, col] > 0:
+          if len(valid_not_bad_actions) > 1 and None in valid_not_bad_actions:
+            valid_not_bad_actions.remove(None)
               
         if valid_not_bad_actions:
           action = np_rng.choice(valid_not_bad_actions)
@@ -912,9 +926,7 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
           for a in shuffled_actions:
             move_row, move_col = rule_utils.move_ship_row_col(
               row, col, a, grid_size)
-            if (not bad_positions[move_row, move_col]) or (
-                ignore_base_collision and (
-                  move_row == target_row and move_col == target_col)):
+            if not bad_positions[move_row, move_col]:
               action = str(a)
               found_non_bad = True
               break

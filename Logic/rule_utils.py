@@ -467,7 +467,8 @@ def fixed_pool_sample_probs(opponent_names):
 
 def record_videos(agent_path, num_agents_per_game, rng_action_seeds,
                   extension_override=None, config_override_agents=None,
-                  deterministic_games=False, env_seed_deterministic=0):
+                  deterministic_games=False, env_seed_deterministic=0,
+                  deterministic_extension=None):
   print("Generating videos of iteration {}".format(agent_path))
   env_configuration = {"agentExec": "LOCAL"}
   if deterministic_games:
@@ -525,6 +526,7 @@ def record_videos(agent_path, num_agents_per_game, rng_action_seeds,
     videos_folder = os.path.join(folder, 'Videos')
     Path(videos_folder).mkdir(parents=True, exist_ok=True)
     ext = extension[:-5] if extension_override is None else extension_override
+    ext += deterministic_extension if deterministic_games else ''
     video_path = os.path.join(videos_folder, ext+' - '+video_type+'.html')
     with open(video_path,"w") as f:
       f.write(game_recording)
