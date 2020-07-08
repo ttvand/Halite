@@ -8,6 +8,7 @@ import os
 import pandas as pd
 from pathlib import Path
 import pickle
+import random
 import tempfile
 from tensorflow.keras import backend as K
 from tensorflow.keras.models import load_model
@@ -817,6 +818,10 @@ class dotdict(dict):
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
+    
+def set_seed(seed):
+  np.random.seed(seed)
+  random.seed(seed)
 
     
 ###############################################################################

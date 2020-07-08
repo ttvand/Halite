@@ -1,4 +1,5 @@
 from datetime import datetime
+import numpy as np
 import os
 import pandas as pd
 import rule_experience
@@ -7,10 +8,8 @@ from shutil import copyfile
 from skopt import Optimizer
 import utils
 
-# Make sure the data is deterministic
+# Possibly make the played games deterministic
 deterministic_games = True
-import numpy as np
-import random
 MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
@@ -126,13 +125,12 @@ config = {
 CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"
 
 def main_rule_utils(config, main_loop_seed=MAIN_LOOP_INITIAL_SEED):
-  if deterministic_games:
-    np.random.seed(main_loop_seed)
-    random.seed(main_loop_seed)
-  
   rule_utils.store_config_on_first_run(config)
   experience_buffer = utils.ExperienceBuffer(config['max_experience_buffer'])
   config_keys = list(config['initial_config_ranges'].keys())
+  
+  if deterministic_games:
+    utils.set_seed(main_loop_seed)
   
   fixed_pool_mode = config['play_fixed_pool_only']
   if fixed_pool_mode:
@@ -170,6 +168,9 @@ def main_rule_utils(config, main_loop_seed=MAIN_LOOP_INITIAL_SEED):
     experience_features_rewards_path = None
   
   while True:
+    if deterministic_games:
+      utils.set_seed(main_loop_seed)
+    
     # Section 1: play games against agents of N previous pools
     if config['num_games_previous_pools'] and not fixed_pool_mode:
       print('\nPlay vs other rule based agents from the last {} pools'.format(

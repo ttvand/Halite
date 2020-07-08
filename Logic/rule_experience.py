@@ -181,8 +181,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
   episode_start_time = time.time()
   
   # Generate reproducible data for better debugging
-  np.random.seed(env_random_seed)
-  random.seed(env_random_seed)
+  utils.set_seed(env_random_seed)
   
   game_agents = [a if isinstance(a, dict) else (
     environment_utils.get_last_callable(a)) for a in game_agents]
