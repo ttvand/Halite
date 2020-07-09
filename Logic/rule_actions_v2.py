@@ -30,6 +30,7 @@ TWO_STEP_THREAT_DIRECTIONS = {
   (2, 0): [(1, 0)],
   }
 
+DISTANCES = {}
 DISTANCE_MASKS = {}
 HALF_PLANES_CATCH = {}
 HALF_PLANES_RUN = {}
@@ -61,6 +62,7 @@ for row in range(DISTANCE_MASK_DIM):
     kernel = np.exp(-manh_distance/(DISTANCE_MASK_DIM/4))
     
     DISTANCE_MASKS[(row, col)] = kernel
+    DISTANCES[(row, col)] = manh_distance
     
     catch_distance_masks = {}
     run_distance_masks = {}
@@ -593,6 +595,55 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
     
   return ship_scores
 
+def protect_last_base(observation, env_config, all_ship_scores, player_obs,
+                      max_considered_attackers=3):
+  my_ship_count = len(player_obs[2])
+  opponent_ships = np.stack([
+    rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
+  opponent_ship_count = opponent_ships.sum()
+  grid_size = opponent_ships.shape[0]
+  base_row, base_col = utils.row_col_from_square_grid_pos(
+    list(player_obs[1].values())[0], grid_size)
+  if opponent_ships.sum():
+    opponent_ship_distances = DISTANCES[(base_row, base_col)][opponent_ships]
+    sorted_opp_distance = np.sort(opponent_ship_distances)
+    
+    ship_base_distances = np.zeros((my_ship_count, 3))
+    # Go over all my ships and approximately compute how far they are expected
+    # to be from the base !with no halite on board! by the end of the next turn
+    # Approximate since returning ships are expected to always move towards the
+    # base and other ships are assumed to be moving away.
+    for i, ship_k in enumerate(player_obs[2]):
+      row, col = utils.row_col_from_square_grid_pos(
+        player_obs[2][ship_k][0], grid_size)
+      ship_scores = all_ship_scores[ship_k]
+      ship_halite = player_obs[2][ship_k][1]
+      current_distance = DISTANCES[(base_row, base_col)][row, col]
+      is_returning = ship_scores[1][base_row, base_col] > max([
+        ship_scores[0].max(), ship_scores[2].max(), ship_scores[3].max()])
+      ship_base_distances[i, 0] = current_distance
+      ship_base_distances[i, 1] = current_distance + 1 - int(2*is_returning)
+      ship_base_distances[i, 2] = ship_halite
+    
+    weighted_distances = ship_base_distances[:, 1] + 1e-6*(
+      ship_base_distances[:, 2])
+    next_ship_distances_ids = np.argsort(weighted_distances)
+    next_ship_distances_sorted = weighted_distances[next_ship_distances_ids]
+    worst_case_opponent_distances = sorted_opp_distance-1
+    num_considered_distances = min([
+      max_considered_attackers, my_ship_count, opponent_ship_count])
+    opponent_can_attack_sorted = next_ship_distances_sorted[
+      :num_considered_distances] > worst_case_opponent_distances[
+        :num_considered_distances]
+    if np.any(opponent_can_attack_sorted):
+      # Summon the closest K agents towards or onto the base to protect it.
+      # When the ship halite is zero, we aggressively attack base raiders
+      num_attackers = 1+np.where(opponent_can_attack_sorted)[0][-1]
+      import pdb; pdb.set_trace()
+      x=1
+      
+  return all_ship_scores
+
 def consider_restoring_base(observation, env_config, all_ship_scores,
                             player_obs):
   obs_halite = np.maximum(0, observation['halite'])
@@ -652,6 +703,12 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   convert_cost = env_config.convertCost
   num_bases = my_bases.sum()
   new_bases = []
+  
+  # Decide to redirect ships to the base to avoid the last base being destroyed
+  # by opposing ships
+  if num_bases == 1 and my_ship_count > 0:
+    all_ship_scores = protect_last_base(
+      observation, env_config, all_ship_scores, player_obs)
   
   # Decide whether to build a new base after my last base has been destroyed.
   if num_bases == 0 and my_ship_count > 1:
