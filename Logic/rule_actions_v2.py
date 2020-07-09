@@ -607,8 +607,9 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
   if opponent_ships.sum():
     opponent_ship_distances = DISTANCES[(base_row, base_col)][opponent_ships]
     sorted_opp_distance = np.sort(opponent_ship_distances)
+    ship_keys = list(player_obs[2].keys())
     
-    ship_base_distances = np.zeros((my_ship_count, 3))
+    ship_base_distances = np.zeros((my_ship_count, 5))
     # Go over all my ships and approximately compute how far they are expected
     # to be from the base !with no halite on board! by the end of the next turn
     # Approximate since returning ships are expected to always move towards the
@@ -624,6 +625,8 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
       ship_base_distances[i, 0] = current_distance
       ship_base_distances[i, 1] = current_distance + 1 - int(2*is_returning)
       ship_base_distances[i, 2] = ship_halite
+      ship_base_distances[i, 3] = row
+      ship_base_distances[i, 4] = col
     
     weighted_distances = ship_base_distances[:, 1] + 1e-6*(
       ship_base_distances[:, 2])
@@ -637,10 +640,32 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
         :num_considered_distances]
     if np.any(opponent_can_attack_sorted):
       # Summon the closest K agents towards or onto the base to protect it.
-      # When the ship halite is zero, we aggressively attack base raiders
+      # When the ship halite is zero, we should aggressively attack base
+      # raiders
       num_attackers = 1+np.where(opponent_can_attack_sorted)[0][-1]
-      import pdb; pdb.set_trace()
-      x=1
+      for i in range(num_attackers):
+        if opponent_can_attack_sorted[i]:
+          # Very simple defense strategy for now: prefer returning to the
+          # base by setting the establish base score high for all squares
+          # beween the current position and the only base. If my ship is
+          # currently on the base: keep it there
+          ship_id = next_ship_distances_ids[i]
+          distance_to_base = ship_base_distances[ship_id, 0]
+          ship_k = ship_keys[ship_id]
+          ship_scores = list(all_ship_scores[ship_k])
+          if distance_to_base <= 1:
+            # Stay or move to the base
+            # TODO: attack the attackers when the base is safe
+            ship_scores[1][base_row, base_col] += 1e6
+          else:
+            row = int(ship_base_distances[ship_id, 3])
+            col = int(ship_base_distances[ship_id, 4])
+            mask_between_current_and_base = np.logical_and(
+              DISTANCES[(row, col)] < distance_to_base,
+              DISTANCES[(base_row, base_col)] < distance_to_base)
+            ship_scores[3][mask_between_current_and_base] += 1e6
+            
+          all_ship_scores[ship_k] = tuple(ship_scores)
       
   return all_ship_scores
 
