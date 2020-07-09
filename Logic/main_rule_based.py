@@ -112,7 +112,7 @@ config = {
     'establish_base_catch_enemy_multiplier': 0.5,
     'two_step_avoid_boxed_enemy_multiplier': 30.0,
     'ignore_catch_prob': 0.5,
-    'max_ships': 10*20,
+    'max_ships': 20,
     'max_spawns_per_step': 3,
     
     'nearby_ship_halite_spawn_constant': 2.0,

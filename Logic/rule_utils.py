@@ -38,7 +38,7 @@ HALITE_MULTIPLIER_CONFIG_ENTRIES = [
           ]
 
 GAUSSIAN_2D_KERNELS = {}
-for dim in range(3, 16, 2):
+for dim in range(3, 20, 2):
   # Modified from https://scipy-lectures.org/intro/scipy/auto_examples/solutions/plot_image_blur.html
   center_distance = np.floor(np.abs(np.arange(dim) - (dim-1)/2))
   horiz_distance = np.tile(center_distance, [dim, 1])
@@ -69,6 +69,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Self play rule_actions_v2 optimum 4 additional rules 2': 2,
     'Self play rule_actions_v2 optimum 4 additional rules 3': 2,
     'C40': 3,
+    'Self play rule_actions_v2 optimum 4 additional rules 4': 2,
     # 'Greedy - many spawns and conversions': 2,
     # 'Run yard one ship': 1,
     # 'Self play optimum 1': 2,
