@@ -5,7 +5,6 @@ from recordtype import recordtype
 import multiprocessing as mp
 import numpy as np
 import os
-import random
 import rule_utils
 import time
 import utils
@@ -265,8 +264,8 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
   if first_zero - last_5000 != 10:
     print("Env error random seed: {}".format(env_random_seed))
     print("Agent error random seeds: {}".format(act_random_seeds))
-    import pdb; pdb.set_trace()
-    x = 1
+    # import pdb; pdb.set_trace()
+    # x = 1
     
   # Obtain the terminal rewards for all agents
   episode_rewards = get_episode_rewards(halite_scores)

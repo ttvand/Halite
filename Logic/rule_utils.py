@@ -70,6 +70,8 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Self play rule_actions_v2 optimum 4 additional rules 3': 2,
     'C40': 3,
     'Self play rule_actions_v2 optimum 4 additional rules 4': 2,
+    'Self play rule_actions_v2 optimum 4 additional rules 5': 2,
+    'Self play rule_actions_v2 optimum 4 additional rules 6': 2,
     # 'Greedy - many spawns and conversions': 2,
     # 'Run yard one ship': 1,
     # 'Self play optimum 1': 2,
