@@ -728,14 +728,18 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
   my_ship_count = len(player_obs[2])
   opponent_ships = np.stack([
     rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
-  opponent_ship_count = opponent_ships.sum()
-  grid_size = opponent_ships.shape[0]
-  base_row, base_col = row_col_from_square_grid_pos(
-    list(player_obs[1].values())[0], grid_size)
+  defend_base_ignore_collision_key = None
+  last_base_protected = True
   if opponent_ships.sum():
+    opponent_ship_count = opponent_ships.sum()
+    grid_size = opponent_ships.shape[0]
+    base_row, base_col = row_col_from_square_grid_pos(
+      list(player_obs[1].values())[0], grid_size)
     opponent_ship_distances = DISTANCES[(base_row, base_col)][opponent_ships]
     sorted_opp_distance = np.sort(opponent_ship_distances)
     ship_keys = list(player_obs[2].keys())
+    halite_ships = np.stack([
+      rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
     
     ship_base_distances = np.zeros((my_ship_count, 5))
     # Go over all my ships and approximately compute how far they are expected
@@ -769,6 +773,8 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
     opponent_can_attack_sorted = next_ship_distances_sorted[
       :num_considered_distances] > worst_case_opponent_distances[
         :num_considered_distances]
+        
+    last_base_protected = worst_case_opponent_distances[0] > 0
     
     if np.any(opponent_can_attack_sorted):
       # Summon the closest K agents towards or onto the base to protect it.
@@ -785,10 +791,14 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
           distance_to_base = ship_base_distances[ship_id, 0]
           ship_k = ship_keys[ship_id]
           ship_scores = list(all_ship_scores[ship_k])
+          row = int(ship_base_distances[ship_id, 3])
+          col = int(ship_base_distances[ship_id, 4])
           if distance_to_base <= 1:
             # Stay or move to the base
             # TODO: attack the attackers when the base is safe
             ship_scores[1][base_row, base_col] += 1e6
+            if halite_ships[row, col] == 0:
+              defend_base_ignore_collision_key = ship_k
           else:
             row = int(ship_base_distances[ship_id, 3])
             col = int(ship_base_distances[ship_id, 4])
@@ -799,7 +809,7 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
             
           all_ship_scores[ship_k] = tuple(ship_scores)
       
-  return all_ship_scores
+  return all_ship_scores, defend_base_ignore_collision_key, last_base_protected
 
 def consider_restoring_base(observation, env_config, all_ship_scores,
                             player_obs):
@@ -860,9 +870,13 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   
   # Decide to redirect ships to the base to avoid the last base being destroyed
   # by opposing ships
+  defend_base_ignore_collision_key = None
   if num_bases == 1 and my_ship_count > 0:
-    all_ship_scores = protect_last_base(
-      observation, env_config, all_ship_scores, player_obs)
+    (all_ship_scores, defend_base_ignore_collision_key,
+     last_base_protected) = protect_last_base(
+       observation, env_config, all_ship_scores, player_obs)
+  else:
+    last_base_protected = True
   
   # Decide whether to build a new base after my last base has been destroyed.
   if num_bases == 0 and my_ship_count > 1:
@@ -987,10 +1001,25 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         target_return = np.where(ship_scores[1] == ship_scores[1].max())
         target_row = target_return[0][0]
         target_col = target_return[1][0]
-        ship_plans[ship_k] = (target_row, target_col, ship_scores[4], False,
+        ship_plans[ship_k] = (target_row, target_col, ship_scores[4],
+                              defend_base_ignore_collision_key == ship_k and (
+                                not last_base_protected),
                               row, col)
         base_distance = grid_distance(target_row, target_col, row, col,
                                       grid_size)
+        
+        if best_return_score > 1e5:
+          # If there is only one path to defend the base: treat it as if there
+          # is only one valid action:
+          defend_dirs = get_dir_from_target(
+            row, col, target_row, target_col, grid_size)
+          if len(defend_dirs) == 1:
+            move_row, move_col = move_ship_row_col(
+              row, col, defend_dirs[0], grid_size)
+            single_escape_squares[move_row, move_col] = 1
+          
+        if not last_base_protected:
+          last_base_protected = base_distance==0
         return_base_distances.append((target_row, target_col, base_distance))
       elif best_establish_score >= best_attack_base_score:
         # Establish base mode

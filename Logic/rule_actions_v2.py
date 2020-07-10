@@ -509,6 +509,47 @@ def get_valid_opponent_ship_actions(rewards_bases_ships, halite_ships, size):
       
   return valid_opponent_actions
 
+def scale_attack_scores_bases(
+    observation, player_obs, spawn_cost, laplace_smoother_rel_ship_count=4,
+    initial_normalize_ship_diff=10, final_normalize_ship_diff=2):
+  stacked_opponent_bases = np.stack([rbs[1] for rbs in observation[
+    'rewards_bases_ships']])[1:]
+  stacked_opponent_ships = np.stack([rbs[2] for rbs in observation[
+    'rewards_bases_ships']])[1:]
+  ship_halite_per_player = np.stack([rbs[3] for rbs in observation[
+    'rewards_bases_ships']]).sum((1, 2))
+  scores = np.array([rbs[0] for rbs in observation['rewards_bases_ships']])
+  base_counts = stacked_opponent_bases.sum((1, 2))
+  my_ship_count = len(player_obs[2])
+  ship_counts = stacked_opponent_ships.sum((1, 2))
+  grid_size = stacked_opponent_bases.shape[1]
+  
+  # Factor 1: an opponent with less bases is more attractive to attack
+  base_count_multiplier = np.where(base_counts == 0, 0, 1/(base_counts+1e-9))
+  
+  # Factor 2: an opponent that is closer in score is more attractive to attack
+  abs_ship_diffs = np.abs((scores[0] + ship_halite_per_player[0]) - (
+    scores[1:] + ship_halite_per_player[1:]))/spawn_cost
+  normalize_diff = initial_normalize_ship_diff - observation['relative_step']*(
+    initial_normalize_ship_diff-final_normalize_ship_diff)
+  rel_normalized_diff = np.maximum(
+    0, (normalize_diff-abs_ship_diffs)/normalize_diff)
+  rel_score_max_y = initial_normalize_ship_diff/normalize_diff
+  rel_score_multiplier = rel_normalized_diff*rel_score_max_y
+  
+  # Factor 3: an opponent with less ships is more attractive to attack
+  rel_ship_count_multiplier = (my_ship_count+laplace_smoother_rel_ship_count)/(
+    ship_counts+laplace_smoother_rel_ship_count)
+  
+  attack_multipliers = base_count_multiplier*rel_score_multiplier*(
+    rel_ship_count_multiplier)
+  tiled_multipliers = np.tile(attack_multipliers.reshape((-1, 1, 1)),
+                              [1, grid_size, grid_size])
+  
+  opponent_bases_scaled = (stacked_opponent_bases*tiled_multipliers).sum(0)
+  
+  return opponent_bases_scaled
+
 
 def get_ship_scores(config, observation, player_obs, env_config, np_rng,
                     verbose):
@@ -562,6 +603,10 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   # Get opponent ship actions that avoid collisions with less halite ships
   opponent_ships_sensible_actions = get_valid_opponent_ship_actions(
     observation['rewards_bases_ships'], halite_ships, grid_size)
+  
+  # Scale the opponent bases as a function of attack desirability
+  opponent_bases_scaled = scale_attack_scores_bases(
+      observation, player_obs, spawn_cost)
 
   ship_scores = {}
   for i, ship_k in enumerate(player_obs[2]):
@@ -624,8 +669,9 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
                   config['establish_base_deposit_multiplier'])
                   
     # Scores 4: attack an opponent base at row, col
-    attack_base_scores = config['attack_base_multiplier']*dm*opponent_bases*(
-      config['attack_base_less_halite_ships_multiplier_base'] ** (
+    attack_base_scores = config['attack_base_multiplier']*dm*(
+      opponent_bases_scaled)*(
+        config['attack_base_less_halite_ships_multiplier_base'] ** (
           opponent_smoother_less_halite_ships)) - (config[
             'attack_base_halite_sum_multiplier'] * obs_halite.sum() / (
               all_ship_count))*int(my_ship_fraction < 0.5) - 1e9*(
@@ -736,7 +782,6 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
             # Stay or move to the base
             # TODO: attack the attackers when the base is safe
             ship_scores[1][base_row, base_col] += 1e6
-            
             if halite_ships[row, col] == 0:
               defend_base_ignore_collision_key = ship_k
           else:
@@ -885,7 +930,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   single_escape_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
   single_path_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
   return_base_distances = []
-  
   for i in range(my_ship_count):
     ship_k = ship_ids[ship_order[i]]
     ship_scores = all_ship_scores[ship_k]
