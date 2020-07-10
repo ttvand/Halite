@@ -3,6 +3,50 @@ import copy
 import numpy as np
 from scipy import signal
 
+CONFIG = {
+  'halite_config_setting_divisor': 1.0,
+  'min_spawns_after_conversions': 1,
+  'collect_smoothed_multiplier': 0.1,
+  'collect_actual_multiplier': 9.0,
+  'collect_less_halite_ships_multiplier_base': 0.8,
+
+  'collect_base_nearest_distance_exponent': 0.3,
+  'return_base_multiplier': 8.0,
+  'return_base_less_halite_ships_multiplier_base': 0.9,
+  'early_game_return_base_additional_multiplier': 1.0,
+  'early_game_return_boost_step': 120,
+
+  'end_game_return_base_additional_multiplier': 5.0,
+  'establish_base_smoothed_multiplier': 0.0,
+  'establish_first_base_smoothed_multiplier_correction': 1.5,
+  'establish_base_deposit_multiplier': 0.8,
+  'establish_base_less_halite_ships_multiplier_base': 1.0,
+  
+  'attack_base_multiplier': 200.0,
+  'attack_base_less_halite_ships_multiplier_base': 0.9,
+  'attack_base_halite_sum_multiplier': 1.0,
+  'attack_base_run_enemy_multiplier': 1.0,
+  'attack_base_catch_enemy_multiplier': 1.0,
+
+  'collect_run_enemy_multiplier': 10.0,
+  'return_base_run_enemy_multiplier': 2.0,
+  'establish_base_run_enemy_multiplier': 2.5,
+  'two_step_avoid_boxed_enemy_multiplier': 30.0,
+  'collect_catch_enemy_multiplier': 0.5,
+  
+  'return_base_catch_enemy_multiplier': 1.0,
+  'establish_base_catch_enemy_multiplier': 0.5,
+  'ignore_catch_prob': 0.5,
+  'max_ships': 20,
+  'max_spawns_per_step': 3,
+
+  'nearby_ship_halite_spawn_constant': 2.0,
+  'nearby_halite_spawn_constant': 10.0,
+  'remaining_budget_spawn_constant': 0.2,
+  'spawn_score_threshold': 50.0,
+  'max_spawn_relative_step_divisor': 100.0,
+  }
+
 
 NORTH = "NORTH"
 SOUTH = "SOUTH"
@@ -28,6 +72,23 @@ TWO_STEP_THREAT_DIRECTIONS = {
   (1, 1): [(1, 0),(0, 1)],
   (2, 0): [(1, 0)],
   }
+
+HALITE_MULTIPLIER_CONFIG_ENTRIES = [
+  # V1
+  "ship_halite_cargo_conversion_bonus_constant",
+  "friendly_ship_halite_conversion_constant",
+  "nearby_halite_conversion_constant",
+  
+  "halite_collect_constant",
+  "nearby_halite_move_constant",
+  "nearby_onto_halite_move_constant",
+  "nearby_base_move_constant",
+  "nearby_move_onto_base_constant",
+  "adjacent_opponent_ships_move_constant",
+  
+  "nearby_ship_halite_spawn_constant",
+  "nearby_halite_spawn_constant",
+          ]
 
 GAUSSIAN_2D_KERNELS = {}
 for dim in range(3, 20, 2):
@@ -1385,15 +1446,68 @@ def get_config_actions(config, observation, player_obs, env_config,
     updated_ship_pos)
   
   mapped_actions.update(base_actions)
-  halite_spent = player_obs[0]-remaining_budget
   
-  step_details = {
-    'ship_scores': ship_scores,
-    'plan_ship_scores': plan_ship_scores,
-    'ship_plans': ship_plans,
-    'mapped_actions': mapped_actions,
-    'observation': observation,
-    'player_obs': player_obs,
+  return mapped_actions
+
+def get_base_pos(base_data, grid_size):
+  base_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  for _, v in base_data.items():
+    row, col = row_col_from_square_grid_pos(v, grid_size)
+    base_pos[row, col] = 1
+  
+  return base_pos
+
+def get_ship_halite_pos(ship_data, grid_size):
+  ship_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  ship_halite = np.zeros((grid_size, grid_size), dtype=np.float32)
+  for _, v in ship_data.items():
+    row, col = row_col_from_square_grid_pos(v[0], grid_size)
+    ship_pos[row, col] = 1
+    ship_halite[row, col] = v[1]
+  
+  return ship_pos, ship_halite
+
+def structured_env_obs(env_configuration, env_observation, active_id):
+  grid_size = env_configuration.size
+  halite = np.array(env_observation['halite']).reshape([
+    grid_size, grid_size])
+  
+  num_episode_steps = env_configuration.episodeSteps
+  step = env_observation.step
+  relative_step = step/(num_episode_steps-2)
+  
+  num_agents = len(env_observation.players)
+  rewards_bases_ships = []
+  for i in range(num_agents):
+    player_obs = env_observation.players[i]
+    reward = player_obs[0]
+    base_pos = get_base_pos(player_obs[1], grid_size)
+    ship_pos, ship_halite = get_ship_halite_pos(player_obs[2], grid_size)
+    rewards_bases_ships.append((reward, base_pos, ship_pos, ship_halite))
+    
+  # Move the agent's rewards_bases_ships to the front of the list
+  agent_vals = rewards_bases_ships.pop(active_id)
+  rewards_bases_ships = [agent_vals] + rewards_bases_ships
+  
+  return {
+    'halite': halite,
+    'relative_step': relative_step,
+    'rewards_bases_ships': rewards_bases_ships,
+    'step': step,
     }
+
+###############################################################################
+for k in CONFIG:
+  if k in HALITE_MULTIPLIER_CONFIG_ENTRIES:
+    CONFIG[k] /= CONFIG['halite_config_setting_divisor']
+
+def my_agent(observation, env_config, **kwargs):
+  rng_action_seed = kwargs.get('rng_action_seed', 0)
+  active_id = observation.player
+  current_observation = structured_env_obs(env_config, observation, active_id)
+  player_obs = observation.players[active_id]
   
-  return mapped_actions, halite_spent, step_details
+  mapped_actions = get_config_actions(
+    CONFIG, current_observation, player_obs, env_config, rng_action_seed)
+     
+  return mapped_actions
