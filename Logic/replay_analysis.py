@@ -80,6 +80,11 @@ json_data = []
 for p in json_paths:
   with open(p) as f:
     json_data.append(json.load(f))
+
+stable_opponents_folder = os.path.join(
+  this_folder, '../Rule agents/Stable opponents pool')
+agent_files = [f for f in os.listdir(stable_opponents_folder) if (
+      f[-3:] == '.py')]
     
 # Return true if the ship at the current position is boxed in by ships with <=
 # halite on board
@@ -271,6 +276,7 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
           game_agent, prev_obs, prev_units_obs, prev_env_observation,
           env_configuration))
       # if prev_obs['step'] == 204:
+      #   print(mapped_actions)
       #   import pdb; pdb.set_trace()
       
       all_counterfactual_ship_loss += (
@@ -290,14 +296,11 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
           all_counterfactual_ship_loss)
 
 process_each_step = True
-stable_opponents_folder = os.path.join(
-  this_folder, '../Rule agents/Stable opponents pool')
-agent_files = [f for f in os.listdir(stable_opponents_folder) if (
-      f[-3:] == '.py')]
 game_agent = [
   rule_utils.sample_from_config_or_path(os.path.join(
-  stable_opponents_folder, agent_files[-1]), return_callable=True),
-  initial_config][
+  stable_opponents_folder, agent_files[-1]),
+    return_callable=True),  # Stable opponents folder
+  initial_config][  # Main code
     1]
 destroyed_conversion_losses = np.zeros((num_replays, 4))
 boxed_ship_losses = np.zeros((num_replays, 4))

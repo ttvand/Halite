@@ -1190,7 +1190,8 @@ def map_ship_plans_to_actions(
             a in ship_scores[ship_k][6])) or (ignore_base_collision and ((
               move_row == target_row and move_col == target_col) or (
                 ignore_bad_attack_directions and not bad_positions[
-                  move_row, move_col]))):
+                  move_row, move_col])) and not my_next_ships[
+                    move_row, move_col]):
           valid_actions.append(a)
 
       if valid_actions:
