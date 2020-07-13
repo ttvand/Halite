@@ -72,6 +72,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Self play rule_actions_v2 optimum 4 additional rules 4': 2,
     'Self play rule_actions_v2 optimum 4 additional rules 5': 2,
     'Self play rule_actions_v2 optimum 4 additional rules 6': 2,
+    'Optimus mine': 3,
     # 'Greedy - many spawns and conversions': 2,
     # 'Run yard one ship': 1,
     # 'Self play optimum 1': 2,
@@ -386,7 +387,7 @@ def get_config_actions(config, observation, player_obs, env_config,
 
 def get_config_or_callable_actions(config_or_callable, observation, player_obs,
                                    env_observation, env_config,
-                                   rng_action_seed, verbose=False):
+                                   rng_action_seed=0, verbose=False):
   if isinstance(config_or_callable, dict):
     return get_config_actions(config_or_callable, observation, player_obs,
                               env_config, rng_action_seed, verbose)

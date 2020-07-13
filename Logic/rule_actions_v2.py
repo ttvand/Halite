@@ -710,7 +710,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   return ship_scores
 
 def protect_last_base(observation, env_config, all_ship_scores, player_obs,
-                      max_considered_attackers=3):
+                      max_considered_attackers=3, halite_on_board_mult=1e-6):
   my_ship_count = len(player_obs[2])
   opponent_ships = np.stack([
     rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
@@ -721,11 +721,12 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
     grid_size = opponent_ships.shape[0]
     base_row, base_col = row_col_from_square_grid_pos(
       list(player_obs[1].values())[0], grid_size)
-    opponent_ship_distances = DISTANCES[(base_row, base_col)][opponent_ships]
-    sorted_opp_distance = np.sort(opponent_ship_distances)
-    ship_keys = list(player_obs[2].keys())
     halite_ships = np.stack([
       rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
+    opponent_ship_distances = DISTANCES[(base_row, base_col)][opponent_ships]+(
+      halite_on_board_mult*halite_ships[opponent_ships])
+    sorted_opp_distance = np.sort(opponent_ship_distances)
+    ship_keys = list(player_obs[2].keys())
     
     ship_base_distances = np.zeros((my_ship_count, 5))
     # Go over all my ships and approximately compute how far they are expected
@@ -746,9 +747,9 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
       ship_base_distances[i, 3] = row
       ship_base_distances[i, 4] = col
     
-    weighted_distances = ship_base_distances[:, 1] + 1e-6*(
+    weighted_distances = ship_base_distances[:, 1] + halite_on_board_mult*(
       ship_base_distances[:, 2])
-    defend_distances = ship_base_distances[:, 0] + 1e-6*(
+    defend_distances = ship_base_distances[:, 0] + halite_on_board_mult*(
       ship_base_distances[:, 2])
     next_ship_distances_ids = np.argsort(weighted_distances)
     defend_distances_ids = np.argsort(defend_distances)

@@ -6,59 +6,67 @@ import rule_utils
 import utils
 
 file_to_player = {
-  '1224047.json': 3,
-  '1224939.json': 0,
-  '1225291.json': 0,
-  '1225418.json': 2,
-  '1225524.json': 1,
-  '1231496.json': 0,
-  '1232624.json': 3,
-  '1235360.json': 3,
-  '1241420.json': 1,
-  '1243341.json': 3,
-  '1245169.json': 1,
-  '1245831.json': 2,
-  '1245948.json': 3,
-  '1249988.json': 1,
-  '1253019.json': 0,
+  # '1224047.json': 3,
+  # '1224939.json': 0,
+  # '1225291.json': 0,
+  # '1225418.json': 2,
+  # '1225524.json': 1,
+  # '1231496.json': 0,
+  # '1232624.json': 3,
+  # '1235360.json': 3,
+  # '1241420.json': 1,
+  # '1243341.json': 3,
+  # '1245169.json': 1,
+  # '1245831.json': 2,
+  # '1245948.json': 3,
+  # '1249988.json': 1,
+  # '1253019.json': 0,
+  '1466414.json': 1,
+  '1433026.json': 0,
   }
 
 initial_config = {
-    'halite_config_setting_divisor': 1.0,
-    'min_spawns_after_conversions': 1,
-    'collect_smoothed_multiplier': 0.1,
-    'collect_actual_multiplier': 9.0,
-    'collect_less_halite_ships_multiplier_base': 0.8,
-    
-    'collect_base_nearest_distance_exponent': 0.3,
-    'return_base_multiplier': 8.0,
-    'return_base_less_halite_ships_multiplier_base': 0.9,
-    'early_game_return_base_additional_multiplier': 1.0,
-    'early_game_return_boost_step': 120,
-    
-    'end_game_return_base_additional_multiplier': 5.0,
-    'establish_base_smoothed_multiplier': 0.0,
-    'establish_first_base_smoothed_multiplier_correction': 1.5,
-    'establish_base_deposit_multiplier': 0.8,
-    'establish_base_less_halite_ships_multiplier_base': 1.0,
-    
-    'collect_run_enemy_multiplier': 10.0,
-    'return_base_run_enemy_multiplier': 2.0,
-    'establish_base_run_enemy_multiplier': 2.5,
-    'collect_catch_enemy_multiplier': 0.5,
-    'return_base_catch_enemy_multiplier': 1.0,
-    
-    'establish_base_catch_enemy_multiplier': 0.5,
-    'two_step_avoid_boxed_enemy_multiplier': 30.0,
-    'ignore_catch_prob': 0.5,
-    'max_ships': 20,
-    'max_spawns_per_step': 3,
-    
-    'nearby_ship_halite_spawn_constant': 2.0,
-    'nearby_halite_spawn_constant': 10.0,
-    'remaining_budget_spawn_constant': 0.2,
-    'spawn_score_threshold': 50.0,
-    'max_spawn_relative_step_divisor': 100.0,
+  'halite_config_setting_divisor': 1.0,
+  'min_spawns_after_conversions': 1,
+  'collect_smoothed_multiplier': 0.1,
+  'collect_actual_multiplier': 9.0,
+  'collect_less_halite_ships_multiplier_base': 0.8,
+
+  'collect_base_nearest_distance_exponent': 0.3,
+  'return_base_multiplier': 8.0,
+  'return_base_less_halite_ships_multiplier_base': 0.9,
+  'early_game_return_base_additional_multiplier': 1.0,
+  'early_game_return_boost_step': 120,
+
+  'end_game_return_base_additional_multiplier': 5.0,
+  'establish_base_smoothed_multiplier': 0.0,
+  'establish_first_base_smoothed_multiplier_correction': 1.5,
+  'establish_base_deposit_multiplier': 0.8,
+  'establish_base_less_halite_ships_multiplier_base': 1.0,
+  
+  'attack_base_multiplier': 200.0,
+  'attack_base_less_halite_ships_multiplier_base': 0.9,
+  'attack_base_halite_sum_multiplier': 1.0,
+  'attack_base_run_enemy_multiplier': 1.0,
+  'attack_base_catch_enemy_multiplier': 1.0,
+
+  'collect_run_enemy_multiplier': 10.0,
+  'return_base_run_enemy_multiplier': 2.0,
+  'establish_base_run_enemy_multiplier': 2.5,
+  'two_step_avoid_boxed_enemy_multiplier': 30.0,
+  'collect_catch_enemy_multiplier': 0.5,
+  
+  'return_base_catch_enemy_multiplier': 1.0,
+  'establish_base_catch_enemy_multiplier': 0.5,
+  'ignore_catch_prob': 0.5,
+  'max_ships': 20,
+  'max_spawns_per_step': 3,
+
+  'nearby_ship_halite_spawn_constant': 2.0,
+  'nearby_halite_spawn_constant': 10.0,
+  'remaining_budget_spawn_constant': 0.2,
+  'spawn_score_threshold': 50.0,
+  'max_spawn_relative_step_divisor': 100.0,
     }
 
 this_folder = os.path.dirname(__file__)
@@ -249,9 +257,9 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
                 mapped_actions, _, step_details = (
                   rule_utils.get_config_or_callable_actions(
                     game_agent, prev_obs, prev_units_obs,
-                    prev_env_observation, env_configuration,
-                    fixed_action_seed=True))
-                # import pdb; pdb.set_trace()
+                    prev_env_observation, env_configuration))
+                # if prev_obs['step'] == 281:
+                #   import pdb; pdb.set_trace()
                 
                 ship_non_boxed_loss_counterfactual += (
                   ship_loss_count_counterfact(mapped_actions, prev_units_obs,
@@ -261,7 +269,9 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
       mapped_actions, _, step_details = (
         rule_utils.get_config_or_callable_actions(
           game_agent, prev_obs, prev_units_obs, prev_env_observation,
-          env_configuration, fixed_action_seed=True))
+          env_configuration))
+      # if prev_obs['step'] == 204:
+      #   import pdb; pdb.set_trace()
       
       all_counterfactual_ship_loss += (
         ship_loss_count_counterfact(mapped_actions, prev_units_obs, obs))
