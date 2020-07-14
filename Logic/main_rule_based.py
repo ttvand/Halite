@@ -12,7 +12,7 @@ import utils
 deterministic_games = True
 MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 50
+NUM_GAMES = 200
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -66,15 +66,17 @@ config = {
   #   'return_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
   
   #   'establish_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-  #   'two_step_avoid_boxed_enemy_multiplier': ((0.0, 60.0), "float", 0),
+  #   'two_step_avoid_boxed_enemy_multiplier_base': ((0.8, 0.99), "float", 0),
+  #   'n_step_avoid_boxed_enemy_multiplier_base': ((0.1, 0.9), "float", 0),
   #   'ignore_catch_prob': ((0.3, 0.5), "float", 0),
   #   'max_ships': ((15, 25), "int", 1),
-  #   'max_spawns_per_step': ((1, 4), "int", 1),
   
+  #   'max_spawns_per_step': ((1, 4), "int", 1),
   #   'nearby_ship_halite_spawn_constant': ((0.5, 3.0), "float", 0),
   #   'nearby_halite_spawn_constant': ((5.0, 20.0), "float", 0),
   #   'remaining_budget_spawn_constant': ((0.1, 0.3), "float", 0),
   #   'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
+  
   #   'max_spawn_relative_step_divisor': ((100.0, 400.0), "float", 1),
   #   }
   
@@ -110,15 +112,17 @@ config = {
     'return_base_catch_enemy_multiplier': 1.0,
     
     'establish_base_catch_enemy_multiplier': 0.5,
-    'two_step_avoid_boxed_enemy_multiplier': 30.0,
+    'two_step_avoid_boxed_enemy_multiplier_base': 0.85,
+    'n_step_avoid_boxed_enemy_multiplier_base': 0.5,
     'ignore_catch_prob': 0.5,
     'max_ships': 20,
-    'max_spawns_per_step': 3,
     
+    'max_spawns_per_step': 3,
     'nearby_ship_halite_spawn_constant': 2.0,
     'nearby_halite_spawn_constant': 10.0,
     'remaining_budget_spawn_constant': 0.2,
     'spawn_score_threshold': 50.0,
+    
     'max_spawn_relative_step_divisor': 100.0,
     }
   }

@@ -36,15 +36,16 @@ initial_config = {
   'collect_run_enemy_multiplier': 10.0,
   'return_base_run_enemy_multiplier': 2.0,
   'establish_base_run_enemy_multiplier': 2.5,
-  'two_step_avoid_boxed_enemy_multiplier': 30.0,
   'collect_catch_enemy_multiplier': 0.5,
-  
   'return_base_catch_enemy_multiplier': 1.0,
+  
   'establish_base_catch_enemy_multiplier': 0.5,
+  'two_step_avoid_boxed_enemy_multiplier_base': 0.85,
+  'n_step_avoid_boxed_enemy_multiplier_base': 0.5,
   'ignore_catch_prob': 0.5,
   'max_ships': 20,
+  
   'max_spawns_per_step': 3,
-
   'nearby_ship_halite_spawn_constant': 2.0,
   'nearby_halite_spawn_constant': 10.0,
   'remaining_budget_spawn_constant': 0.2,
@@ -59,6 +60,7 @@ json_files = np.sort([f for f in os.listdir(data_folder) if f[-4:] == "json"])
 json_files = json_files[-max_analysed:]
 num_replays = len(json_files)
 json_paths = [os.path.join(data_folder, f) for f in json_files]
+print(json_files)
 
 json_data = []
 for p in json_paths:
