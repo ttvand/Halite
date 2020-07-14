@@ -5,25 +5,8 @@ import pandas as pd
 import rule_utils
 import utils
 
-file_to_player = {
-  # '1224047.json': 3,
-  # '1224939.json': 0,
-  # '1225291.json': 0,
-  # '1225418.json': 2,
-  # '1225524.json': 1,
-  # '1231496.json': 0,
-  # '1232624.json': 3,
-  # '1235360.json': 3,
-  # '1241420.json': 1,
-  # '1243341.json': 3,
-  # '1245169.json': 1,
-  # '1245831.json': 2,
-  # '1245948.json': 3,
-  # '1249988.json': 1,
-  # '1253019.json': 0,
-  '1466414.json': 1,
-  '1433026.json': 0,
-  }
+my_submission = [16335046, 16466155][1]
+max_analysed = 5
 
 initial_config = {
   'halite_config_setting_divisor': 1.0,
@@ -71,15 +54,17 @@ initial_config = {
 
 this_folder = os.path.dirname(__file__)
 replay_folder = os.path.join(this_folder, '../Rule agents/Leaderboard replays/')
-data_folder = os.path.join(replay_folder, 'Json files')
+data_folder = os.path.join(replay_folder, str(my_submission))
 json_files = np.sort([f for f in os.listdir(data_folder) if f[-4:] == "json"])
+json_files = json_files[-max_analysed:]
 num_replays = len(json_files)
 json_paths = [os.path.join(data_folder, f) for f in json_files]
 
 json_data = []
 for p in json_paths:
   with open(p) as f:
-    json_data.append(json.load(f))
+    raw_data = json.load(f)
+    json_data.append(json.loads(raw_data))
 
 stable_opponents_folder = os.path.join(
   this_folder, '../Rule agents/Stable opponents pool')
@@ -313,7 +298,7 @@ all_ship_loss_counterfactual = np.zeros((num_replays, 4))
 for i in range(num_replays):
   print("Processing replay {} of {}".format(i+1, num_replays))
   replay = json_data[i]
-  my_id = file_to_player[json_files[i]]
+  my_id = int(json_files[i][-6])
   other_ids = list(set(range(4)) - set([my_id]))
   
   for j, analysis_id in zip(range(4), [my_id] + other_ids):
