@@ -203,7 +203,8 @@ def update_scores_enemy_ships(
     config, collect_grid_scores, return_to_base_scores, establish_base_scores,
     attack_base_scores, opponent_ships, halite_ships, row, col, grid_size,
     spawn_cost, drop_None_valid, obs_halite, collect_rate, np_rng,
-    opponent_ships_sensible_actions, ignore_bad_attack_directions, min_dist=2):
+    opponent_ships_sensible_actions, ignore_bad_attack_directions,
+    observation, ship_k, min_dist=2):
   direction_halite_diff_distance={
     NORTH: None,
     SOUTH: None,
@@ -738,7 +739,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
        establish_base_scores, attack_base_scores, opponent_ships, halite_ships,
        row, col, grid_size, spawn_cost, drop_None_valid, obs_halite,
        collect_rate, np_rng, opponent_ships_sensible_actions,
-       ignore_bad_attack_directions)
+       ignore_bad_attack_directions, observation, ship_k)
        
     # Update the scores as a function of blocking enemy bases and my early
     # game initial base
@@ -942,7 +943,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     ship_halite = player_obs[2][ship_k][1]
     has_budget_to_convert = (ship_halite + player_obs[0]) >= convert_cost
     convert_surrounded_ship = ship_scores[5] and (
-      ship_halite >= (convert_cost/2)) and has_budget_to_convert
+      ship_halite >= (convert_cost/config[
+            'boxed_in_halite_convert_divisor'])) and has_budget_to_convert
     valid_directions = ship_scores[6]
     almost_boxed_in = not None in valid_directions and (len(
       valid_directions) == 1 or set(valid_directions) in [
@@ -1203,10 +1205,9 @@ def map_ship_plans_to_actions(
       player_obs[2][ship_k][0], grid_size)
     has_selected_action = False
     if isinstance(ship_plans[ship_k], str):
-      # TODO: verify this is not buggy when the opponent has destroyed one of
-      # my bases and there are no bases left
       if ship_plans[ship_k] == "CONVERT" and (
-          halite_ships[row, col] < convert_cost/3) and (
+          halite_ships[row, col] < convert_cost/config[
+            'boxed_in_halite_convert_divisor']) and (
             halite_ships[row, col] > 0) and my_ship_count > 1 and (
               plan_ship_scores[ship_k][2][row, col] < 1e6):
         # Override the convert logic - it's better to lose some ships than to

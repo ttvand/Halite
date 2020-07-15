@@ -50,6 +50,8 @@ initial_config = {
   'nearby_halite_spawn_constant': 10.0,
   'remaining_budget_spawn_constant': 0.2,
   'spawn_score_threshold': 50.0,
+  
+  'boxed_in_halite_convert_divisor': 3.0,
   'max_spawn_relative_step_divisor': 100.0,
     }
 
