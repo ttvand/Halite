@@ -52,6 +52,7 @@ initial_config = {
   'spawn_score_threshold': 50.0,
   
   'boxed_in_halite_convert_divisor': 3.0,
+  'n_step_avoid_min_die_prob_cutoff': 0.1,
   'max_spawn_relative_step_divisor': 100.0,
     }
 

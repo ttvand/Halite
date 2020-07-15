@@ -10,9 +10,9 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 21 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 200
+NUM_GAMES = 7
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -77,6 +77,8 @@ config = {
   #   'remaining_budget_spawn_constant': ((0.1, 0.3), "float", 0),
   #   'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
   
+  #   'boxed_in_halite_convert_divisor': ((1.5, 5.0), "float", 1.0),
+  #   'n_step_avoid_min_die_prob_cutoff': ((0.0, 0.2), "float", 0.0),
   #   'max_spawn_relative_step_divisor': ((100.0, 400.0), "float", 1),
   #   }
   
@@ -123,6 +125,8 @@ config = {
     'remaining_budget_spawn_constant': 0.2,
     'spawn_score_threshold': 50.0,
     
+    'boxed_in_halite_convert_divisor': 3.0,
+    'n_step_avoid_min_die_prob_cutoff': 0.1,
     'max_spawn_relative_step_divisor': 100.0,
     }
   }

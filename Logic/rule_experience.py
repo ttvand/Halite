@@ -254,7 +254,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
     num_agents, halite_scores, episode_step, max_episode_steps, env)
     
   # Evaluate why the game evolved as it did
-  import pdb; pdb.set_trace()
+  # import pdb; pdb.set_trace()
   # vals_5000 = np.where(halite_scores[:, 0] == 5000)[0]
   # last_5000 = vals_5000[vals_5000 < 10][-1]
   # if not np.any(halite_scores[:, 0] == 0):
@@ -321,6 +321,14 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
   reward_sum = 0
   opponent_id_rewards = [(0, 0, n) for n in opponent_names]
   
+  # First generate the random ids in order to obtain seeds that are independent
+  # from the number of games
+  env_random_seeds = np.zeros((num_games), dtype=np.int)
+  act_random_seeds = np.zeros((num_games, 4), dtype=np.int)
+  for i in range(num_games):
+    env_random_seeds[i] = np.random.randint(0, int(1e9))
+    act_random_seeds[i] = np.random.randint(0, int(1e9), size=4)
+  
   # Precompute other agent ids in order to obtain stratified opponents
   if fixed_opponent_pool:
     other_sample_probs = rule_utils.fixed_pool_sample_probs(opponent_names)
@@ -359,8 +367,8 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     n_game_agents.append(game_agents)
     n_opponent_ids.append(opponent_ids)
     n_opponent_id_names.append(opponent_id_names)
-    n_env_random_seeds.append(np.random.randint(0, int(1e9)))
-    n_act_random_seeds.append(np.random.randint(0, int(1e9), size=4))
+    n_env_random_seeds.append(int(env_random_seeds[i]))
+    n_act_random_seeds.append(act_random_seeds[i])
   
   if use_multiprocessing:
     with mp.Pool(processes=mp.cpu_count()-1) as pool:

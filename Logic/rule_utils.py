@@ -134,6 +134,7 @@ def append_config_scores(config_settings, scores, config_keys,
       for i in range(len(scores)):
         results.loc[results.shape[0]] = config_settings[i] + [-scores[i]]
     except:
+      # We probably modified the configs
       import pdb; pdb.set_trace()
   else:
     results = pd.DataFrame(config_settings, columns=config_keys)
@@ -255,7 +256,12 @@ def plot_reward_versus_features(
         import pdb; pdb.set_trace()
         x=1
     else:
-      sns.regplot(x=x_vals, y=targets, ax=ax).set(title=c)
+      try:
+        sns.regplot(x=x_vals, y=targets, ax=ax).set(title=c)
+      except:
+        continue
+        import pdb; pdb.set_trace()
+        x=1
       
   fig = ax.get_figure()
   fig.savefig(os.path.join(
