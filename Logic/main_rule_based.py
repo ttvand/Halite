@@ -133,7 +133,7 @@ config = {
     
     'boxed_in_halite_convert_divisor': 3.0,
     'n_step_avoid_min_die_prob_cutoff': 0.1, #*0,
-    'n_step_avoid_window_size': 6,
+    'n_step_avoid_window_size': 7,
     'influence_map_base_weight': 2.0,
     'influence_map_min_ship_weight': 0.1,
     

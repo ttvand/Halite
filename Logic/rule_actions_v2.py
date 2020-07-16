@@ -395,7 +395,8 @@ def update_scores_enemy_ships(
             nz_dim = int(threat_dir[0] == 0)
             dir_offset = relative_other_pos[nz_dim]*threat_dir[nz_dim]
             other_dir_abs_offset = np.abs(relative_other_pos[1-nz_dim])
-            if dir_offset > 0 and other_dir_abs_offset <= dir_offset:
+            
+            if dir_offset > 0 and (other_dir_abs_offset-1) <= dir_offset:
               lt_catch_prob[threat_dir].append((
                 other_dir_abs_offset+dir_offset)*my_material_defense_multiplier)
           
