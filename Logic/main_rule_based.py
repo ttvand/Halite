@@ -12,7 +12,7 @@ import utils
 deterministic_games = True
 MAIN_LOOP_INITIAL_SEED = 21 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 7
+NUM_GAMES = 1
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -23,7 +23,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': True,
+  'use_multiprocessing': False,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
@@ -79,6 +79,8 @@ config = {
   
   #   'boxed_in_halite_convert_divisor': ((1.5, 5.0), "float", 1.0),
   #   'n_step_avoid_min_die_prob_cutoff': ((0.0, 0.2), "float", 0.0),
+  #   'influence_map_base_weight': ((1.0, 3.0), "float", 0.0),
+  #   'influence_map_min_ship_weight': ((0.2, 0.8), "float", 0.0),
   #   'max_spawn_relative_step_divisor': ((100.0, 400.0), "float", 1),
   #   }
   
@@ -114,8 +116,8 @@ config = {
     'return_base_catch_enemy_multiplier': 1.0,
     
     'establish_base_catch_enemy_multiplier': 0.5,
-    'two_step_avoid_boxed_enemy_multiplier_base': 0.85,
-    'n_step_avoid_boxed_enemy_multiplier_base': 0.5,
+    'two_step_avoid_boxed_enemy_multiplier_base': 0.85*1e-100,
+    'n_step_avoid_boxed_enemy_multiplier_base': 0.5*1e-100,
     'ignore_catch_prob': 0.5,
     'max_ships': 20,
     
@@ -126,7 +128,9 @@ config = {
     'spawn_score_threshold': 50.0,
     
     'boxed_in_halite_convert_divisor': 3.0,
-    'n_step_avoid_min_die_prob_cutoff': 0.1,
+    'n_step_avoid_min_die_prob_cutoff': 0.1*0,
+    'influence_map_base_weight': 2.0,
+    'influence_map_min_ship_weight': 0.4,
     'max_spawn_relative_step_divisor': 100.0,
     }
   }

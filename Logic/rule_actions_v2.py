@@ -629,6 +629,47 @@ def scale_attack_scores_bases(
   
   return opponent_bases_scaled
 
+def get_influence_map(config, my_bases, my_ships, opponent_bases,
+                      opponent_ships, halite_ships, observation,
+                      smooth_kernel_dim=7):
+  if my_ships.sum() == 0:
+    return None
+  
+  grid_size = my_ships.shape[0]
+  ship_range = 1-config['influence_map_min_ship_weight']
+  my_or_other_ships = my_ships + opponent_ships
+  all_ships_halite = halite_ships[my_or_other_ships]
+  unique_halite_vals = np.sort(np.unique(all_ships_halite)).astype(
+    np.int).tolist()
+  num_unique = len(unique_halite_vals)
+  my_halite_ranks = np.array(
+    [unique_halite_vals.index(hs) for hs in halite_ships[my_ships]])
+  my_ship_weights = 1 - my_halite_ranks/(num_unique-1+1e-9)*ship_range
+  opponent_halite_ranks = np.array(
+    [unique_halite_vals.index(hs) for hs in halite_ships[opponent_ships]])
+  opponent_ship_weights = 1 - opponent_halite_ranks/(
+    num_unique-1+1e-9)*ship_range
+  
+  raw_influence_map = np.zeros((grid_size, grid_size))
+  raw_influence_map[my_ships] += my_ship_weights
+  raw_influence_map[opponent_ships] -= opponent_ship_weights
+  raw_influence_map[my_bases] += config['influence_map_base_weight']
+  raw_influence_map[opponent_bases.astype(np.bool)] -= config[
+    'influence_map_base_weight']
+  
+  influence_map = smooth2d(
+    raw_influence_map, smooth_kernel_dim=smooth_kernel_dim)
+  if influence_map.max() > 0:
+    influence_map[influence_map > 0] /= influence_map.max()
+  if influence_map.min() < 0:
+    influence_map[influence_map < 0] /= (-influence_map.min())
+  
+  if observation['step'] == 20:
+    import pdb; pdb.set_trace()
+  
+  return influence_map
+  
+
 def get_ship_scores(config, observation, player_obs, env_config, np_rng,
                     ignore_bad_attack_directions, verbose):
   convert_cost = env_config.convertCost
@@ -686,6 +727,11 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   # Scale the opponent bases as a function of attack desirability
   opponent_bases_scaled = scale_attack_scores_bases(
       observation, player_obs, spawn_cost)
+
+  # Get the influence map
+  influence_map = get_influence_map(
+    config, my_bases, my_ships, opponent_bases, opponent_ships, halite_ships,
+    observation)
 
   ship_scores = {}
   for i, ship_k in enumerate(player_obs[2]):
