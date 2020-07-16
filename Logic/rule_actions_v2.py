@@ -365,7 +365,8 @@ def update_scores_enemy_ships(
     if d not in two_step_bad_directions:
       # For the remaining valid directions: compute a score that resembles 
       # the probability of being boxed in sometime in the future
-      opponent_mask_lt = ROW_COL_MAX_DISTANCE_MASKS[(move_row, move_col, 6)]
+      opponent_mask_lt = ROW_COL_MAX_DISTANCE_MASKS[
+        (move_row, move_col, config['n_step_avoid_window_size'])]
       less_halite_threat_opponents_lt = np.where(np.logical_and(
         opponent_mask_lt, np.logical_and(
           opponent_ships, my_next_halite > halite_ships)))
@@ -629,52 +630,72 @@ def scale_attack_scores_bases(
   
   return opponent_bases_scaled
 
-def get_influence_map(config, my_bases, my_ships, opponent_bases,
-                      opponent_ships, halite_ships, observation,
-                      smooth_kernel_dim=7):
-  if my_ships.sum() == 0:
-    return None
+def get_influence_map(config, stacked_bases, stacked_ships, halite_ships,
+                      observation, player_obs, smooth_kernel_dim=7):
   
+  all_ships = stacked_ships.sum(0).astype(np.bool)
+  my_ships = stacked_ships[0].astype(np.bool)
+  
+  if my_ships.sum() == 0:
+    return None, None, None
+  
+  num_players = stacked_ships.shape[0]
   grid_size = my_ships.shape[0]
   ship_range = 1-config['influence_map_min_ship_weight']
-  my_or_other_ships = my_ships + opponent_ships
-  all_ships_halite = halite_ships[my_or_other_ships]
+  all_ships_halite = halite_ships[all_ships]
   unique_halite_vals = np.sort(np.unique(all_ships_halite)).astype(
     np.int).tolist()
   num_unique = len(unique_halite_vals)
-  my_halite_ranks = np.array(
-    [unique_halite_vals.index(hs) for hs in halite_ships[my_ships]])
-  my_ship_weights = 1 - my_halite_ranks/(num_unique-1+1e-9)*ship_range
-  opponent_halite_ranks = np.array(
-    [unique_halite_vals.index(hs) for hs in halite_ships[opponent_ships]])
-  opponent_ship_weights = 1 - opponent_halite_ranks/(
-    num_unique-1+1e-9)*ship_range
   
-  raw_influence_map = np.zeros((grid_size, grid_size))
-  raw_influence_map[my_ships] += my_ship_weights
-  raw_influence_map[opponent_ships] -= opponent_ship_weights
-  raw_influence_map[my_bases] += config['influence_map_base_weight']
-  raw_influence_map[opponent_bases.astype(np.bool)] -= config[
-    'influence_map_base_weight']
+  halite_ranks = [np.array(
+    [unique_halite_vals.index(hs) for hs in halite_ships[
+      stacked_ships[i]]]) for i in range(num_players)]
+  ship_weights = [1 - r/(num_unique-1+1e-9)*ship_range for r in halite_ranks]
   
-  influence_map = smooth2d(
-    raw_influence_map, smooth_kernel_dim=smooth_kernel_dim)
-  if influence_map.max() > 0:
-    influence_map[influence_map > 0] /= influence_map.max()
-  if influence_map.min() < 0:
-    influence_map[influence_map < 0] /= (-influence_map.min())
+  raw_influence_maps = np.zeros((num_players, grid_size, grid_size))
+  influence_maps = np.zeros((num_players, grid_size, grid_size))
+  for i in range(num_players):
+    raw_influence_maps[i][stacked_ships[i]] += ship_weights[i]
+    raw_influence_maps[i][stacked_bases[i]] += config[
+      'influence_map_base_weight']
+    
+    influence_maps[i] = smooth2d(raw_influence_maps[i],
+                                 smooth_kernel_dim=smooth_kernel_dim)
   
-  if observation['step'] == 20:
-    import pdb; pdb.set_trace()
+  my_influence = influence_maps[0]
+  max_other_influence = influence_maps[1:].max(0)
+  influence_map = my_influence - max_other_influence
   
-  return influence_map
+  # if influence_map.max() > 0:
+  #   influence_map[influence_map > 0] /= influence_map.max()
+  # if influence_map.min() < 0:
+  #   influence_map[influence_map < 0] /= (-influence_map.min())
+  # print(observation['step'])
+  # if observation['step'] % 20 == 0:
+  #   import pdb; pdb.set_trace()
+  
+  # Derive the priority scores based on the influence map
+  priority_scores = 1/(1+np.abs(influence_map))
+  
+  # Extract a dict of my ship weights
+  ship_priority_weights = {}
+  for ship_k in player_obs[2]:
+    row, col = row_col_from_square_grid_pos(player_obs[2][ship_k][0], grid_size)
+    ship_halite = halite_ships[row, col]
+    halite_rank = unique_halite_vals.index(ship_halite)
+    ship_priority_weights[ship_k] = 1 - halite_rank/(
+      num_unique-1+1e-9)*ship_range
+  
+  return influence_map, priority_scores, ship_priority_weights
   
 
 def get_ship_scores(config, observation, player_obs, env_config, np_rng,
                     ignore_bad_attack_directions, verbose):
   convert_cost = env_config.convertCost
   spawn_cost = env_config.spawnCost
-  my_bases = observation['rewards_bases_ships'][0][1]
+  stacked_bases = np.stack(
+    [rbs[1] for rbs in observation['rewards_bases_ships']])
+  my_bases = stacked_bases[0]
   obs_halite = np.maximum(0, observation['halite'])
   # Clip obs_halite to zero when gathering it doesn't add to the score
   # code: delta_halite = int(cell.halite * configuration.collect_rate)
@@ -701,15 +722,15 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   #   observation['rewards_bases_ships'][0][3])
   smoothed_halite = smooth2d(obs_halite)
   can_deposit_halite = my_bases.sum() > 0
-  my_ships = observation['rewards_bases_ships'][0][2]
-  opponent_ships = np.stack([
-    rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
+  stacked_ships = np.stack(
+    [rbs[2] for rbs in observation['rewards_bases_ships']])
+  my_ships = stacked_ships[0]
+  opponent_ships = stacked_ships[1:].sum(0) > 0
   all_ship_count = opponent_ships.sum() + my_ship_count
   my_ship_fraction = my_ship_count/(1e-9+all_ship_count)
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
-  opponent_bases = np.stack([rbs[1] for rbs in observation[
-    'rewards_bases_ships']])[1:].sum(0)
+  opponent_bases = stacked_bases[1:].sum(0)
   
   # Flag to indicate I should not occupy/flood my base with early ships
   my_halite = observation['rewards_bases_ships'][0][0]
@@ -729,9 +750,8 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
       observation, player_obs, spawn_cost)
 
   # Get the influence map
-  influence_map = get_influence_map(
-    config, my_bases, my_ships, opponent_bases, opponent_ships, halite_ships,
-    observation)
+  influence_map, priority_scores, ship_priority_weights = get_influence_map(
+    config, stacked_bases, stacked_ships, halite_ships, observation, player_obs)
 
   ship_scores = {}
   for i, ship_k in enumerate(player_obs[2]):
@@ -752,7 +772,10 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
         config['collect_less_halite_ships_multiplier_base'] ** (
           opponent_smoother_less_halite_ships)) * (
             base_nearest_distance ** config[
-              'collect_base_nearest_distance_exponent'])
+              'collect_base_nearest_distance_exponent'])*((
+                1+config['influence_weights_multiplier']*(
+                  ship_priority_weights[ship_k])**config[
+                    'influence_weights_exponent']) ** priority_scores)
     
     # Override the collect score to 0 to avoid blocking the base early on in
     # the game: All squares right next to the initial base are set to 0
