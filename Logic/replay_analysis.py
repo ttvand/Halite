@@ -6,7 +6,8 @@ import rule_utils
 import utils
 
 my_submission = [16335046, 16466155][1]
-max_analysed = 5
+max_analysed = 73
+discard_last = 72
 
 initial_config = {
   'halite_config_setting_divisor': 1.0,
@@ -53,14 +54,22 @@ initial_config = {
   
   'boxed_in_halite_convert_divisor': 3.0,
   'n_step_avoid_min_die_prob_cutoff': 0.1,
+  'n_step_avoid_window_size': 7,
+  'influence_map_base_weight': 2.0,
+  'influence_map_min_ship_weight': 0.1,
+  
+  'influence_weights_multiplier': 3.0,
+  'influence_weights_exponent': 6.0,
   'max_spawn_relative_step_divisor': 100.0,
-    }
+  }
 
 this_folder = os.path.dirname(__file__)
 replay_folder = os.path.join(this_folder, '../Rule agents/Leaderboard replays/')
 data_folder = os.path.join(replay_folder, str(my_submission))
 json_files = np.sort([f for f in os.listdir(data_folder) if f[-4:] == "json"])
 json_files = json_files[-max_analysed:]
+if discard_last > 0:
+  json_files = json_files[:-discard_last]
 num_replays = len(json_files)
 json_paths = [os.path.join(data_folder, f) for f in json_files]
 print(json_files)
@@ -289,8 +298,8 @@ process_each_step = True
 game_agent = [
   rule_utils.sample_from_config_or_path(os.path.join(
   stable_opponents_folder, agent_files[-1]),
-    return_callable=True),  # Stable opponents folder
-  initial_config][  # Main code
+    return_callable=True),  # Index 0: Stable opponents folder
+  initial_config][  # Index 1: Main rule actions code
     1]
 destroyed_conversion_losses = np.zeros((num_replays, 4))
 boxed_ship_losses = np.zeros((num_replays, 4))

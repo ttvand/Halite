@@ -284,6 +284,7 @@ def update_scores_enemy_ships(
         # I would like a collision unless if there is another opponent ship
         # chasing me - risk avoiding policy for now: if there is at least
         # one ship in a direction that has less halite, I should avoid it
+        halite_diff = max(-spawn_cost/2, halite_diff)
         distance_multiplier = 1/halite_diff_dist[1]
         mask_collect_return = np.copy(HALF_PLANES_CATCH[(row, col)][direction])
         collect_grid_scores -= mask_collect_return*halite_diff*(
@@ -1571,8 +1572,9 @@ def get_config_actions(config, observation, player_obs, env_config,
   np_rng = get_numpy_random_generator(
     config, observation, rng_action_seed, print_seed=True)
   
-  # Decide when to attack bases aggressively
+  # Decide how many ships I can have attack bases aggressively
   steps_remaining = 400-observation['step']
+  max_aggressive_attackers = int(len(player_obs[2]) - (3+0.25*steps_remaining))
   ignore_bad_attack_directions = (len(player_obs[2])-3)/steps_remaining > 0.3
   
   # Compute the ship scores for all high level actions
@@ -1607,5 +1609,8 @@ def get_config_actions(config, observation, player_obs, env_config,
     'observation': observation,
     'player_obs': player_obs,
     }
+  
+  # if observation['step'] == 78:
+  #   import pdb; pdb.set_trace()
   
   return mapped_actions, halite_spent, step_details
