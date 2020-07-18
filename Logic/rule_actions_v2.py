@@ -1160,6 +1160,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   single_escape_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
   single_path_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
   return_base_distances = []
+  
   for i in range(my_ship_count):
     ship_k = ship_ids[ship_order[i]]
     ship_scores = all_ship_scores[ship_k]
@@ -1326,7 +1327,7 @@ def get_dir_from_target(row, col, target_row, target_col, grid_size):
 def map_ship_plans_to_actions(
     config, observation, player_obs, env_config, verbose, ship_scores,
     plan_ship_scores, ship_plans, np_rng, ignore_bad_attack_directions,
-    base_attackers):
+    base_attackers, steps_remaining):
   ship_actions = {}
   remaining_budget = player_obs[0]
   convert_cost = env_config.convertCost
@@ -1348,7 +1349,7 @@ def map_ship_plans_to_actions(
   for target_base in base_attackers:
     attackers = base_attackers[target_base]
     num_attackers = len(attackers)
-    if num_attackers > 1:
+    if num_attackers > 1 and steps_remaining > 20:
       # Synchronize the attackers
       attack_distances = np.array([a[0] for a in attackers])
       argsort_distances = np.argsort(attack_distances)
@@ -1423,8 +1424,11 @@ def map_ship_plans_to_actions(
           valid_actions.append(a)
       move_valid_actions[ship_k] = valid_actions
   
-    ship_priority_scores[i] = -1e6*len(ship_scores[ship_k][6]) -1e3*len(
-      valid_actions) - i
+    num_non_immediate_bad_directions = len(set(
+      ship_scores[ship_k][6] + ship_scores[ship_k][8]))
+    
+    ship_priority_scores[i] = -1e6*num_non_immediate_bad_directions -1e3*len(
+      valid_actions) + 1e4*len(ship_scores[ship_k][8]) - i
   
   ship_order = np.argsort(-ship_priority_scores)
   ordered_ship_plans = [ship_key_plans[o] for o in ship_order]
@@ -1476,17 +1480,19 @@ def map_ship_plans_to_actions(
         attack_halite = np.array([a[1] for a in attackers])
         
         attack_scores = np.sort(attack_distances+1e-6*attack_halite)
-        opponent_id = np.where(stacked_bases[:, target_row, target_col])[0][0]
-        opponent_ships = stacked_ships[opponent_id]
-        defend_scores = 1e-6*halite_ships[opponent_ships] + np.maximum(
-          1, DISTANCES[(target_row, target_col)][opponent_ships])
-        sorted_defend_scores = np.sort(defend_scores)
-        max_ships = min(attack_scores.size, defend_scores.size)
-        can_not_defend = np.any(
-          attack_scores[:max_ships] < sorted_defend_scores[:max_ships])
-        
-        if not can_not_defend:
-          ignore_base_collision = False
+        opponent_ids = np.where(stacked_bases[:, target_row, target_col])[0]
+        if opponent_ids:
+          opponent_id = opponent_ids[0]
+          opponent_ships = stacked_ships[opponent_id]
+          defend_scores = 1e-6*halite_ships[opponent_ships] + np.maximum(
+            1, DISTANCES[(target_row, target_col)][opponent_ships])
+          sorted_defend_scores = np.sort(defend_scores)
+          max_ships = min(attack_scores.size, defend_scores.size)
+          can_not_defend = np.any(
+            attack_scores[:max_ships] < sorted_defend_scores[:max_ships])
+          
+          if not can_not_defend:
+            ignore_base_collision = False
         
       # Filter out bad positions from the shortest actions
       valid_actions = []
@@ -1705,7 +1711,7 @@ def get_config_actions(config, observation, player_obs, env_config,
    updated_ship_pos) = map_ship_plans_to_actions(
      config, observation, player_obs, env_config, verbose, ship_scores,
      plan_ship_scores, ship_plans, np_rng, ignore_bad_attack_directions,
-     base_attackers)
+     base_attackers, steps_remaining)
   
   # Decide for all bases whether to spawn or keep the base available
   base_actions, remaining_budget = decide_existing_base_spawns(
@@ -1725,7 +1731,7 @@ def get_config_actions(config, observation, player_obs, env_config,
     'player_obs': player_obs,
     }
   
-  # if observation['step'] == 214:
+  # if observation['step'] == 28:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, halite_spent, step_details
