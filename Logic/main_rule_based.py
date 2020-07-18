@@ -12,7 +12,7 @@ import utils
 deterministic_games = True
 MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 1
+NUM_GAMES = 100
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -109,7 +109,7 @@ config = {
     
     'attack_base_multiplier': 200.0,
     'attack_base_less_halite_ships_multiplier_base': 0.9,
-    'attack_base_halite_sum_multiplier': 1.0*0,
+    'attack_base_halite_sum_multiplier': 1.0*0, #*0,
     'attack_base_run_enemy_multiplier': 1.0,
     'attack_base_catch_enemy_multiplier': 1.0,
     
@@ -120,8 +120,8 @@ config = {
     'return_base_catch_enemy_multiplier': 1.0,
     
     'establish_base_catch_enemy_multiplier': 0.5,
-    'two_step_avoid_boxed_enemy_multiplier_base': 0.85, #*1e-100,
-    'n_step_avoid_boxed_enemy_multiplier_base': 0.5, #*1e-100,
+    'two_step_avoid_boxed_enemy_multiplier_base': 0.85,
+    'n_step_avoid_boxed_enemy_multiplier_base': 0.5,
     'ignore_catch_prob': 0.5,
     'max_ships': 20,
     
@@ -132,7 +132,7 @@ config = {
     'spawn_score_threshold': 50.0,
     
     'boxed_in_halite_convert_divisor': 3.0,
-    'n_step_avoid_min_die_prob_cutoff': 0.1, #*0,
+    'n_step_avoid_min_die_prob_cutoff': 0.1,
     'n_step_avoid_window_size': 7,
     'influence_map_base_weight': 2.0,
     'influence_map_min_ship_weight': 0.1,
