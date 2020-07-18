@@ -135,8 +135,9 @@ def append_config_scores(config_settings, scores, config_keys,
       for i in range(len(scores)):
         results.loc[results.shape[0]] = config_settings[i] + [-scores[i]]
     except:
-      # We probably modified the configs
-      import pdb; pdb.set_trace()
+      # We probably modified the configs - start a new df
+      results = pd.DataFrame(config_settings, columns=config_keys)
+      results['Average win rate'] = [-s for s in scores]
   else:
     results = pd.DataFrame(config_settings, columns=config_keys)
     results['Average win rate'] = [-s for s in scores]
