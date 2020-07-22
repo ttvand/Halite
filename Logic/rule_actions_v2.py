@@ -11,6 +11,10 @@ WEST = "WEST"
 CONVERT = "CONVERT"
 SPAWN = "SPAWN"
 MOVE_DIRECTIONS = [None, NORTH, SOUTH, EAST, WEST]
+RELATIVE_DIR_MAPPING = {None: (0, 0), NORTH: (-1, 0), SOUTH: (1, 0),
+                        EAST: (0, 1), WEST: (0, -1)}
+OPPOSITE_MAPPING = {None: None, NORTH: SOUTH, SOUTH: NORTH, EAST: WEST,
+                    WEST: EAST}
 RELATIVE_DIRECTIONS = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]
 MOVE_GATHER_OPTIONS = [(-1, 0, False), (1, 0, False), (0, -1, False),
                        (0, 1, False), (0, 0, True)]
@@ -205,12 +209,8 @@ def update_scores_enemy_ships(
     grid_size, spawn_cost, drop_None_valid, obs_halite, collect_rate, np_rng,
     opponent_ships_sensible_actions, ignore_bad_attack_directions,
     observation, ship_k, my_bases, my_ships, min_dist=2):
-  direction_halite_diff_distance={
-    NORTH: None,
-    SOUTH: None,
-    EAST: None,
-    WEST: None,
-    }
+  direction_halite_diff_distance_raw = {
+    NORTH: [], SOUTH: [], EAST: [], WEST: []}
   my_bases_or_ships = np.logical_or(my_bases, my_ships)
   # TODO: take change in halite into account
   # TODO: take my less halite ships into account
@@ -230,20 +230,39 @@ def update_scores_enemy_ships(
           halite_diff = halite_ships[row, col] - halite_ships[
             considered_row, considered_col]
           for d in relevant_dirs:
-            halite_diff_dist = direction_halite_diff_distance[d]
-            if halite_diff_dist is None:
-              direction_halite_diff_distance[d] = (halite_diff, distance)
-            else:
-              max_halite_diff = max(halite_diff_dist[0], halite_diff)
-              min_ship_dist = min(halite_diff_dist[1], distance)
-              direction_halite_diff_distance[d] = (
-                max_halite_diff, min_ship_dist)
+            direction_halite_diff_distance_raw[d].append(
+              (halite_diff, distance))
+            
+  direction_halite_diff_distance = {}
+  for k in direction_halite_diff_distance_raw:
+    vals = np.array(direction_halite_diff_distance_raw[k])
+    if vals.size:
+      diffs = vals[:, 0]
+      distances = vals[:, 1]
+      max_diff = diffs.max()
+      if max_diff > 0:
+        greater_min_distance = distances[diffs > 0].min()
+        direction_halite_diff_distance[k] = (max_diff, greater_min_distance)
+      elif max_diff == 0:
+        equal_min_distance = distances[diffs == 0].min()
+        direction_halite_diff_distance[k] = (max_diff, equal_min_distance)
+      else:
+        min_diff = diffs.min()
+        min_diff_min_distance = distances[diffs == min_diff].min()
+        direction_halite_diff_distance[k] = (min_diff, min_diff_min_distance)
+    else:
+      direction_halite_diff_distance[k] = None
                 
   ship_halite = halite_ships[row, col]
   preferred_directions = []
   valid_directions = copy.copy(MOVE_DIRECTIONS)
+  one_step_valid_directions = copy.copy(MOVE_DIRECTIONS)
   bad_directions = []
   ignore_catch = np_rng.uniform() < config['ignore_catch_prob']
+  
+  # if observation['step'] == 71 and ship_k == '5-1':
+  #   import pdb; pdb.set_trace()
+  #   x=1
   
   for direction, halite_diff_dist in direction_halite_diff_distance.items():
     if halite_diff_dist is not None:
@@ -253,6 +272,7 @@ def update_scores_enemy_ships(
         distance_multiplier = 1/halite_diff_dist[1]
         mask_collect_return = np.copy(HALF_PLANES_RUN[(row, col)][direction])
         valid_directions.remove(direction)
+        one_step_valid_directions.remove(direction)
         bad_directions.append(direction)
         if halite_diff_dist[1] == 1:
           if halite_diff != 0:
@@ -260,6 +280,7 @@ def update_scores_enemy_ships(
             # to gain. TODO: consider making this a function of the game state
             if None in valid_directions:
               valid_directions.remove(None)
+              one_step_valid_directions.remove(None)
               bad_directions.append(None)
           else:
             mask_collect_return[row, col] = False
@@ -308,6 +329,7 @@ def update_scores_enemy_ships(
 
   if drop_None_valid and None in valid_directions:
     valid_directions.remove(None)
+    one_step_valid_directions.remove(None)
     
   # For the remaining valid directions: compute a score that resembles the 
   # probability of being boxed in during the next step
@@ -379,7 +401,15 @@ def update_scores_enemy_ships(
           opponent_ships, my_next_halite > halite_ships)))
       num_threat_ships_lt = less_halite_threat_opponents_lt[0].size
       
-      if num_threat_ships_lt > 1:
+      # Ignore the box in threat if I have a base and at least one zero halite
+      # ship one step from the move square
+      ignore_threat = my_bases[
+        ROW_COL_DISTANCE_MASKS[(move_row, move_col, 1)]].sum() > 0 and ((
+          halite_ships[np.logical_and(
+            my_ships,
+            ROW_COL_DISTANCE_MASKS[(move_row, move_col, 1)])] == 0).sum() > 0)
+      
+      if num_threat_ships_lt > 1 and not ignore_threat:
         lt_catch_prob = {k: [] for k in RELATIVE_DIRECTIONS[:-1]}
         for i in range(num_threat_ships_lt):
           other_row = less_halite_threat_opponents_lt[0][i]
@@ -439,17 +469,20 @@ def update_scores_enemy_ships(
     valid_directions = list(
       set(valid_directions) - set(valid_not_preferred_dirs))
               
+  # if observation['step'] == 105 and ship_k == '46-1':
+  #   import pdb; pdb.set_trace()
+    
   return (collect_grid_scores, return_to_base_scores, establish_base_scores,
           attack_base_scores, preferred_directions, valid_directions,
           len(bad_directions) == 5, two_step_bad_directions,
-          n_step_step_bad_directions)
+          n_step_step_bad_directions, one_step_valid_directions)
 
 # Update the scores as a function of blocking enemy bases
 def update_scores_blockers(
     collect_grid_scores, return_to_base_scores, establish_base_scores,
     attack_base_scores, row, col, grid_size, blockers, valid_directions,
-    early_base_direct_dir=None, blocker_max_distance=half_distance_mask_dim,
-    update_attack_base=True):
+    one_step_valid_directions, early_base_direct_dir=None,
+    blocker_max_distance=half_distance_mask_dim, update_attack_base=True):
   for d in MOVE_DIRECTIONS[1:]:
     if d == NORTH:
       rows = np.mod(row - (1 + np.arange(blocker_max_distance)), grid_size)
@@ -476,27 +509,31 @@ def update_scores_blockers(
       mask_rows = rows[first_blocking_base_id:]
       mask_cols = cols[first_blocking_base_id:]
       
-      collect_grid_scores[mask_rows, mask_cols] = -1e9
-      return_to_base_scores[mask_rows, mask_cols] = -1e9
-      establish_base_scores[mask_rows, mask_cols] = -1e9
+      collect_grid_scores[mask_rows, mask_cols] = -1e12
+      return_to_base_scores[mask_rows, mask_cols] = -1e12
+      establish_base_scores[mask_rows, mask_cols] = -1e12
       if update_attack_base:
-        attack_base_scores[mask_rows, mask_cols] = -1e9
+        attack_base_scores[mask_rows, mask_cols] = -1e12
       
       if first_blocking_base_id == 0 and d in valid_directions:
         valid_directions.remove(d)
+      if first_blocking_base_id == 0 and d in one_step_valid_directions:
+        one_step_valid_directions.remove(d)
         
   # Additional logic for the use of avoiding collisions when there is only a
   # single escape direction
   if blockers[row, col]:
-    collect_grid_scores[row, col] = -1e9
-    return_to_base_scores[row, col] = -1e9
-    establish_base_scores[row, col] = -1e9
-    attack_base_scores[row, col] = -1e9
+    collect_grid_scores[row, col] = -1e12
+    return_to_base_scores[row, col] = -1e12
+    establish_base_scores[row, col] = -1e12
+    attack_base_scores[row, col] = -1e12
     if None in valid_directions:
       valid_directions.remove(None)
+    if None in one_step_valid_directions:
+      one_step_valid_directions.remove(None)
       
   return (collect_grid_scores, return_to_base_scores, establish_base_scores,
-          attack_base_scores, valid_directions)
+          attack_base_scores, valid_directions, one_step_valid_directions)
 
 def set_scores_single_nearby_zero(scores, nearby, size, ship_row, ship_col,
                                   nearby_distance=1):
@@ -680,7 +717,8 @@ def get_influence_map(config, stacked_bases, stacked_ships, halite_ships,
   # Extract a dict of my ship weights
   ship_priority_weights = {}
   for ship_k in player_obs[2]:
-    row, col = row_col_from_square_grid_pos(player_obs[2][ship_k][0], grid_size)
+    row, col = row_col_from_square_grid_pos(
+      player_obs[2][ship_k][0], grid_size)
     ship_halite = halite_ships[row, col]
     halite_rank = unique_halite_vals.index(ship_halite)
     ship_priority_weights[ship_k] = 1 - halite_rank/(
@@ -730,6 +768,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   my_ship_fraction = my_ship_count/(1e-9+all_ship_count)
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
+  halite_ships[stacked_ships.sum(0) == 0] = 1e-9
   opponent_bases = stacked_bases[1:].sum(0)
   
   # Flag to indicate I should not occupy/flood my base with early ships
@@ -824,7 +863,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
         config['attack_base_less_halite_ships_multiplier_base'] ** (
           opponent_smoother_less_halite_ships)) - (config[
             'attack_base_halite_sum_multiplier'] * obs_halite.sum() / (
-              all_ship_count))*int(my_ship_fraction < 0.5) - 1e9*(
+              all_ship_count))*int(my_ship_fraction < 0.5) - 1e12*(
                 ship_halite > 0)
 
     # Update the scores as a function of nearby enemy ships to avoid collisions
@@ -832,8 +871,8 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
     # enemy ships that carry less halite
     (collect_grid_scores, base_return_grid_multiplier, establish_base_scores,
      attack_base_scores, preferred_directions, valid_directions,
-     agent_surrounded, two_step_bad_directions,
-     n_step_step_bad_directions) = update_scores_enemy_ships(
+     agent_surrounded, two_step_bad_directions, n_step_step_bad_directions,
+     one_step_valid_directions) = update_scores_enemy_ships(
        config, collect_grid_scores, base_return_grid_multiplier,
        establish_base_scores, attack_base_scores, opponent_ships,
        opponent_bases, halite_ships, row, col, grid_size, spawn_cost,
@@ -844,22 +883,25 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
     # Update the scores as a function of blocking enemy bases and my early
     # game initial base
     (collect_grid_scores, base_return_grid_multiplier, establish_base_scores,
-     attack_base_scores, valid_directions) = update_scores_blockers(
+     attack_base_scores, valid_directions,
+     one_step_valid_directions) = update_scores_blockers(
        collect_grid_scores, base_return_grid_multiplier, establish_base_scores,
        attack_base_scores, row, col, grid_size, opponent_bases,
-       valid_directions, early_next_base_dir, update_attack_base=False)
+       valid_directions, one_step_valid_directions, early_next_base_dir,
+       update_attack_base=False)
             
     if last_episode_turn:
       # Convert all ships with more halite than the convert cost on the last
       # episode step
-      establish_base_scores[row, col] = 1e9*(ship_halite >= convert_cost)
+      establish_base_scores[row, col] = 1e12*(ship_halite >= convert_cost)
         
     ship_scores[ship_k] = (
       collect_grid_scores, base_return_grid_multiplier, establish_base_scores,
       attack_base_scores, preferred_directions, agent_surrounded,
-      valid_directions, two_step_bad_directions, n_step_step_bad_directions)
+      valid_directions, two_step_bad_directions, n_step_step_bad_directions,
+      one_step_valid_directions)
     
-  return ship_scores
+  return ship_scores, opponent_ships_sensible_actions
 
 def get_mask_between_exclude_ends(r1, c1, r2, c2, grid_size):
   rel_pos = get_relative_position(r1, c1, r2, c2, grid_size)
@@ -890,8 +932,11 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
     my_ship_count = len(player_obs[2])
     base_row, base_col = row_col_from_square_grid_pos(
       list(player_obs[1].values())[0], grid_size)
+    stacked_ships = np.stack(
+      [rbs[2] for rbs in observation['rewards_bases_ships']])
     halite_ships = np.stack([
       rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
+    halite_ships[stacked_ships.sum(0) == 0] = 1e-9
     opponent_ship_distances = DISTANCES[(base_row, base_col)][opponent_ships]+(
       halite_on_board_mult*halite_ships[opponent_ships])
     sorted_opp_distance = np.sort(opponent_ship_distances)
@@ -946,6 +991,9 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
         
     last_base_protected = worst_case_opponent_distances[0] > 0
     
+    # if observation['step'] == 391:
+    #   import pdb; pdb.set_trace()
+    
     # TODO: preventively go to the base if I have a ship with halite right
     # next to the base and the opponents may be able to destroy me in two steps
     if np.any(opponent_can_attack_sorted):
@@ -976,6 +1024,7 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
           distance_to_base = ship_base_distances[ship_id, 0]
           ship_k = ship_keys[ship_id]
           ship_scores = list(all_ship_scores[ship_k])
+          ship_halite = int(ship_base_distances[ship_id, 2])
           row = int(ship_base_distances[ship_id, 3])
           col = int(ship_base_distances[ship_id, 4])
           
@@ -988,15 +1037,25 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
             elif obs_halite[row, col] == 0 or (
                 worst_case_opponent_distances[i] > distance_to_base):
               ship_scores[0][row, col] += 1e6
+              if None in ship_scores[9]:
+                # Stay close to the base when defending
+                ship_scores[6].append(None)
             if halite_ships[row, col] == 0 and (
                 defend_base_ignore_collision_key is None):
               defend_base_ignore_collision_key = ship_k
           else:
             # Set the base as the target and override the base synchronization
-            # TODO: verify that this actually works
             ship_scores[1][base_row, base_col] += 1e6*(
                 max_considered_attackers-i)
             ignore_base_collision_ship_keys.append(ship_k)
+            
+            # Defend the base without fear if I have no halite on board
+            if ship_halite == 0:
+              ship_scores[6] = copy.copy(MOVE_DIRECTIONS)
+              ship_scores[7] = []
+              ship_scores[8] = []
+              ship_scores[9] = copy.copy(MOVE_DIRECTIONS)
+            
             # synchronization logic to avoid arriving at the same time
             # mask_between_current_and_base = get_mask_between_exclude_ends(
             #   row, col, base_row, base_col, grid_size)
@@ -1018,8 +1077,11 @@ def consider_restoring_base(observation, env_config, all_ship_scores,
   obs_halite[obs_halite < 1/collect_rate] = 0
   my_ships = observation['rewards_bases_ships'][0][2]
   my_ship_count = my_ships.sum()
+  stacked_ships = np.stack(
+    [rbs[2] for rbs in observation['rewards_bases_ships']])
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
+  halite_ships[stacked_ships.sum(0) == 0] = 1e-9
   opponent_bases = np.stack([rbs[1] for rbs in observation[
     'rewards_bases_ships']])[1:].sum(0)
   opponent_ships = np.stack([
@@ -1052,7 +1114,7 @@ def consider_restoring_base(observation, env_config, all_ship_scores,
     convert_k = list(player_obs[2].keys())[np.argmax(convert_priority_scores)]
     convert_row, convert_col = row_col_from_square_grid_pos(
         player_obs[2][convert_k][0], grid_size)
-    all_ship_scores[convert_k][2][convert_row, convert_col] = 1e9
+    all_ship_scores[convert_k][2][convert_row, convert_col] = 1e12
     
   return all_ship_scores
 
@@ -1070,6 +1132,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
                    max_attackers_per_base=3):
   my_bases = observation['rewards_bases_ships'][0][1]
   can_deposit_halite = my_bases.sum() > 0
+  all_ships = np.stack(
+    [rbs[2] for rbs in observation['rewards_bases_ships']]).sum(0) > 0
   grid_size = observation['halite'].shape[0]
   ship_ids = list(player_obs[2])
   my_ship_count = len(player_obs[2])
@@ -1150,10 +1214,21 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         ship_scores[2][r, c] = 0
     all_ship_scores[ship_k] = ship_scores
     
+    num_non_immediate_bad_directions = len(set(
+      ship_scores[6] + ship_scores[8]))
+    
+    num_two_step_neighbors = all_ships[
+      ROW_COL_MAX_DISTANCE_MASKS[(row, col, 2)]].sum() - 1
+    
     ship_priority_scores[i] = np.stack([
       ship_scores[0], ship_scores[1], ship_scores[2], ship_scores[3]]).max()+(
-        1e9*(len(ship_scores[6]) == 1))
+        1e12*(len(ship_scores[6]) == 1)) - 1e6*(
+          num_non_immediate_bad_directions) + 1e4*len(ship_scores[8]) + 1e2*(
+            num_two_step_neighbors)
     
+  # if observation['step'] == 89:
+  #   import pdb; pdb.set_trace()
+        
   ship_order = np.argsort(-ship_priority_scores)
   occupied_target_squares = []
   occupied_squares_count = {}
@@ -1172,12 +1247,13 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
       
       for sq, d in [(single_escape_squares, 4), (single_path_squares, 1)]:
         if sq.sum():
-          (s0, s1, s2, s3, s6) = update_scores_blockers(
+          (s0, s1, s2, s3, _, _) = update_scores_blockers(
             ship_scores[0], ship_scores[1], ship_scores[2], ship_scores[3],
-            row, col, grid_size, sq, valid_directions, blocker_max_distance=d,
-            update_attack_base=True)
-          ship_scores = (s0, s1, s2, s3, ship_scores[4], ship_scores[5], s6,
-                         ship_scores[7], ship_scores[8])
+            row, col, grid_size, sq, valid_directions, ship_scores[9],
+            blocker_max_distance=d, update_attack_base=True)
+          ship_scores = (s0, s1, s2, s3, ship_scores[4], ship_scores[5],
+                         ship_scores[6], ship_scores[7], ship_scores[8],
+                         ship_scores[9])
       
       for (r, c) in occupied_target_squares:
         ship_scores[0][r, c] = 0
@@ -1324,10 +1400,75 @@ def get_dir_from_target(row, col, target_row, target_col, grid_size):
     
   return shortest_directions
 
+def base_can_be_defended(base_attackers, target_row, target_col, stacked_bases,
+                         stacked_ships, halite_ships):
+  attackers = base_attackers[(target_row, target_col)]
+  num_attackers = len(attackers)
+  attack_distances = np.array([a[0] for a in attackers])
+  distance_argsort = np.argsort(attack_distances)
+  attack_distances_sorted = np.maximum(
+    attack_distances[distance_argsort], 1+np.arange(num_attackers))
+  attack_halite_sorted = np.array([
+    attackers[distance_argsort[i]][1] for i in range(num_attackers)])
+  
+  attack_scores = np.sort(attack_distances_sorted+1e-6*attack_halite_sorted)
+  opponent_ids = np.where(stacked_bases[:, target_row, target_col])[0]
+  can_defend = False
+  if opponent_ids:
+    opponent_id = opponent_ids[0]
+    opponent_ships = stacked_ships[opponent_id]
+    defend_scores = 1e-6*halite_ships[opponent_ships] + np.maximum(
+      1, DISTANCES[(target_row, target_col)][opponent_ships])
+    sorted_defend_scores = np.sort(defend_scores)
+    max_ships = min(attack_scores.size, defend_scores.size)
+    can_defend = not np.any(
+      attack_scores[:max_ships] < sorted_defend_scores[:max_ships])
+    if can_defend:
+      # Check that the opponent can defend against a sequence of sacrifices
+      in_sequence_near_base = attack_distances_sorted[:max_ships] == (
+        1+np.arange(max_ships))
+      num_lined_up = (np.cumprod(in_sequence_near_base) == 1).sum()
+      opponent_zero_halite_sorted_base_distances = np.sort(DISTANCES[
+        (target_row, target_col)][np.logical_and(
+          opponent_ships, halite_ships == 0)])
+      can_defend = opponent_zero_halite_sorted_base_distances.size >= (
+        num_lined_up) and not np.any(
+          opponent_zero_halite_sorted_base_distances[:num_lined_up] > (
+            1+np.arange(num_lined_up)))
+    
+  return can_defend
+
+def get_opponent_blocked_escape_dir(
+  bad_positions, opponent_ships_sensible_actions, row, col, np_rng, grid_size,
+  observation, ship_k):
+  escape_actions = []
+  for a in MOVE_DIRECTIONS:
+    move_row, move_col = move_ship_row_col(row, col, a, grid_size)
+    
+    if not bad_positions[move_row, move_col]:
+      # Check all five ways the move row, move col can be reached. If none is
+      # in the opponent sensible actions: take that action
+      opponent_can_attack_square = False
+      for b in MOVE_DIRECTIONS:
+        neighbor_row, neighbor_col = move_ship_row_col(
+          move_row, move_col, b, grid_size)
+        neighbor_k = (neighbor_row, neighbor_col)
+        if neighbor_k in opponent_ships_sensible_actions:
+          threat_opponent_rel_dir = RELATIVE_DIR_MAPPING[OPPOSITE_MAPPING[b]]
+          if threat_opponent_rel_dir in opponent_ships_sensible_actions[
+              neighbor_k]:
+            opponent_can_attack_square = True
+            break
+          
+      if not opponent_can_attack_square:
+        escape_actions.append(a)
+        
+  return escape_actions
+
 def map_ship_plans_to_actions(
     config, observation, player_obs, env_config, verbose, ship_scores,
-    plan_ship_scores, ship_plans, np_rng, ignore_bad_attack_directions,
-    base_attackers, steps_remaining):
+    before_plan_ship_scores, ship_plans, np_rng, ignore_bad_attack_directions,
+    base_attackers, steps_remaining, opponent_ships_sensible_actions):
   ship_actions = {}
   remaining_budget = player_obs[0]
   convert_cost = env_config.convertCost
@@ -1344,56 +1485,67 @@ def map_ship_plans_to_actions(
     [rbs[2] for rbs in observation['rewards_bases_ships']])
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
+  halite_ships[stacked_ships.sum(0) == 0] = 1e-9
   updated_ship_pos = {}
   
   for target_base in base_attackers:
     attackers = base_attackers[target_base]
     num_attackers = len(attackers)
     if num_attackers > 1 and steps_remaining > 20:
-      # Synchronize the attackers
-      attack_distances = np.array([a[0] for a in attackers])
-      argsort_distances = np.argsort(attack_distances)
-      sorted_distances = attack_distances[argsort_distances]
+      # If the base can not be defended: don't bother synchronizing the attack
+      # if observation['step'] == 353:
+      #   import pdb; pdb.set_trace()
+      #   x=1
+        
+      can_defend = base_can_be_defended(
+        base_attackers, target_base[0], target_base[1], stacked_bases, stacked_ships,
+        halite_ships)
       
-      if not np.all(np.diff(sorted_distances) == 1):
-        # First try the simplest strategy: pause the attackers that are the
-        # closest to the target on squares with no halite
-        should_wait = np.zeros((num_attackers), dtype=np.bool)
-        if sorted_distances[0] == sorted_distances[1]:
-          should_wait[argsort_distances[1]] = 1
-          next_distance = sorted_distances[0]
-        elif sorted_distances[0] == sorted_distances[1]-1:
-          should_wait[argsort_distances[0]] = 1
-          should_wait[argsort_distances[1]] = 1
-          next_distance = sorted_distances[1]
-        else:
-          should_wait[argsort_distances[0]] = 1
-          next_distance = sorted_distances[1]-1
-          
-        for i in range(2, num_attackers):
-          if next_distance == sorted_distances[i]-2:
-            # I should close the ranks and move along
-            next_distance = sorted_distances[i]-1
+      # Synchronize the attackers
+      if can_defend:
+        attack_distances = np.array([a[0] for a in attackers])
+        argsort_distances = np.argsort(attack_distances)
+        sorted_distances = attack_distances[argsort_distances]
+        
+        if not np.all(np.diff(sorted_distances) == 1):
+          # First try the simplest strategy: pause the attackers that are the
+          # closest to the target on squares with no halite
+          should_wait = np.zeros((num_attackers), dtype=np.bool)
+          if sorted_distances[0] == sorted_distances[1]:
+            should_wait[argsort_distances[1]] = 1
+            next_distance = sorted_distances[0]
+          elif sorted_distances[0] == sorted_distances[1]-1:
+            should_wait[argsort_distances[0]] = 1
+            should_wait[argsort_distances[1]] = 1
+            next_distance = sorted_distances[1]
           else:
-            # I should wait for other ships to catch up
-            should_wait[argsort_distances[i]] = 1
-            next_distance = sorted_distances[i]
+            should_wait[argsort_distances[0]] = 1
+            next_distance = sorted_distances[1]-1
             
-        # Verify that all ships that should wait can wait
-        can_all_wait = True
-        should_wait_ids = np.where(should_wait)[0]
-        for should_wait_id in should_wait_ids:
-          row = attackers[should_wait_id][3]
-          col = attackers[should_wait_id][4]
-          if obs_halite[row, col] > 0:
-            can_all_wait = False
-            break
-        if can_all_wait:
+          for i in range(2, num_attackers):
+            if next_distance == sorted_distances[i]-2:
+              # I should close the ranks and move along
+              next_distance = sorted_distances[i]-1
+            else:
+              # I should wait for other ships to catch up
+              should_wait[argsort_distances[i]] = 1
+              next_distance = sorted_distances[i]
+              
+          # Verify that all ships that should wait can wait
+          can_all_wait = True
+          should_wait_ids = np.where(should_wait)[0]
           for should_wait_id in should_wait_ids:
-            ship_k = attackers[should_wait_id][2]
             row = attackers[should_wait_id][3]
             col = attackers[should_wait_id][4]
-            ship_plans[ship_k] = (row, col, [], False, row, col)
+            if obs_halite[row, col] > 0:
+              can_all_wait = False
+              break
+          if can_all_wait:
+            for should_wait_id in should_wait_ids:
+              ship_k = attackers[should_wait_id][2]
+              row = attackers[should_wait_id][3]
+              col = attackers[should_wait_id][4]
+              ship_plans[ship_k] = (row, col, [], False, row, col)
   
   # List all positions you definitely don't want to move to. Initially this
   # only contains enemy bases and eventually also earlier ships.
@@ -1428,21 +1580,30 @@ def map_ship_plans_to_actions(
       ship_scores[ship_k][6] + ship_scores[ship_k][8]))
     
     ship_priority_scores[i] = -1e6*num_non_immediate_bad_directions -1e3*len(
-      valid_actions) + 1e4*len(ship_scores[ship_k][8]) - i
+      valid_actions) + 1e4*len(ship_scores[ship_k][8]) - 1e5*len(
+        before_plan_ship_scores[ship_k][9]) - i
   
   ship_order = np.argsort(-ship_priority_scores)
   ordered_ship_plans = [ship_key_plans[o] for o in ship_order]
   
+  # Keep track of all my ship positions and rearrange the action planning when
+  # one of my ships only has one remaining option that does not self destruct.
+  ship_non_self_destructive_actions = {}
   for ship_k in ordered_ship_plans:
+    ship_non_self_destructive_actions[ship_k] = copy.copy(MOVE_DIRECTIONS)
+  
+  num_ships = len(ordered_ship_plans)
+  for i in range(num_ships):
+    ship_k = ordered_ship_plans[i]
     row, col = row_col_from_square_grid_pos(
       player_obs[2][ship_k][0], grid_size)
     has_selected_action = False
     if isinstance(ship_plans[ship_k], str):
-      if ship_plans[ship_k] == "CONVERT" and (
+      if ship_plans[ship_k] == CONVERT and (
           halite_ships[row, col] < convert_cost/config[
             'boxed_in_halite_convert_divisor']) and (
             halite_ships[row, col] > 0) and my_ship_count > 1 and (
-              plan_ship_scores[ship_k][2][row, col] < 1e6):
+              ship_scores[ship_k][2][row, col] < 1e6):
         # Override the convert logic - it's better to lose some ships than to
         # convert too often (good candidate for stateful logic)
         if not ship_scores[ship_k][6]:
@@ -1461,6 +1622,11 @@ def map_ship_plans_to_actions(
         obs_halite[row, col] = 0
         remaining_budget -= convert_cost
         has_selected_action = True
+        del ship_non_self_destructive_actions[ship_k]
+        
+    # if observation['step'] == 103 and row == 10 and col == 8:
+    #   import pdb; pdb.set_trace()
+    #   x=1
         
     if not has_selected_action:
       (target_row, target_col, preferred_directions, ignore_base_collision,
@@ -1470,29 +1636,15 @@ def map_ship_plans_to_actions(
       
       if ignore_base_collision and not ignore_bad_attack_directions and (
           target_row, target_col) in base_attackers:
-        # Determine if it makes sense to attack a base (it can not be defended
-        # by the opponent). Back off if it can be defended.
-        attackers = base_attackers[(target_row, target_col)]
-        num_attackers = len(attackers)
-        attack_distances = np.array([a[0] for a in attackers])
-        attack_distances = np.maximum(
-          attack_distances, 1+np.arange(num_attackers))
-        attack_halite = np.array([a[1] for a in attackers])
         
-        attack_scores = np.sort(attack_distances+1e-6*attack_halite)
-        opponent_ids = np.where(stacked_bases[:, target_row, target_col])[0]
-        if opponent_ids:
-          opponent_id = opponent_ids[0]
-          opponent_ships = stacked_ships[opponent_id]
-          defend_scores = 1e-6*halite_ships[opponent_ships] + np.maximum(
-            1, DISTANCES[(target_row, target_col)][opponent_ships])
-          sorted_defend_scores = np.sort(defend_scores)
-          max_ships = min(attack_scores.size, defend_scores.size)
-          can_not_defend = np.any(
-            attack_scores[:max_ships] < sorted_defend_scores[:max_ships])
+        can_defend = base_can_be_defended(
+          base_attackers, target_row, target_col, stacked_bases, stacked_ships,
+          halite_ships)
           
-          if not can_not_defend:
-            ignore_base_collision = False
+        if can_defend:
+          ignore_base_collision = False
+        else:
+          ignore_bad_attack_directions = True
         
       # Filter out bad positions from the shortest actions
       valid_actions = []
@@ -1529,6 +1681,32 @@ def map_ship_plans_to_actions(
             if not bad_positions[move_row, move_col]:
               valid_not_bad_actions.append(a)
               
+        # Pick a direction where my opponent should not go to since I can
+        # attack that square with one of my less halite ships
+        if not valid_not_bad_actions:
+          self_escape_actions = get_opponent_blocked_escape_dir(
+            bad_positions, opponent_ships_sensible_actions, row, col, np_rng,
+            grid_size, observation, ship_k)
+          if self_escape_actions:
+            print(observation['step'], row, col, self_escape_actions)
+            if ship_scores[ship_k][7]:
+              # Filter out 2-step bad actions if that leaves us with options
+              # import pdb; pdb.set_trace()
+              self_escape_actions_not_2_step_bad = list(
+                set(self_escape_actions) - set(ship_scores[ship_k][7]))
+              if self_escape_actions_not_2_step_bad:
+                self_escape_actions = self_escape_actions_not_2_step_bad
+                
+            # Filter out n-step bad actions if that leaves us with options
+            if ship_scores[ship_k][8]:
+              self_escape_actions_not_n_step_bad = list(
+                set(self_escape_actions) - set(ship_scores[ship_k][8]))
+              if self_escape_actions_not_n_step_bad:
+                # import pdb; pdb.set_trace()
+                self_escape_actions = self_escape_actions_not_n_step_bad
+            
+            valid_not_bad_actions = self_escape_actions
+              
         # There is no valid direction available; consider n step bad actions
         if not valid_not_bad_actions:
           for a in np_rng.permutation(MOVE_DIRECTIONS):
@@ -1564,6 +1742,7 @@ def map_ship_plans_to_actions(
           # Pick a random, not bad moving action
           shuffled_actions = np_rng.permutation(MOVE_DIRECTIONS[1:])
           found_non_bad = False
+          print("Random escape", observation['step'], row, col)
           for a in shuffled_actions:
             move_row, move_col = move_ship_row_col(row, col, a, grid_size)
             if not bad_positions[move_row, move_col]:
@@ -1583,6 +1762,38 @@ def map_ship_plans_to_actions(
       updated_ship_pos[ship_k] = (new_row, new_col)
       if action is not None:
         ship_actions[ship_k] = action
+        
+      # Update the non self destructive actions for ships where no action is
+      # planned yet
+      del ship_non_self_destructive_actions[ship_k]
+      rearrange_self_destruct_ships = []
+      for j in range(i+1, num_ships):
+        other_ship_k = ordered_ship_plans[j]
+        if ship_plans[other_ship_k] != CONVERT:
+          other_row = ship_plans[other_ship_k][4]
+          other_col = ship_plans[other_ship_k][5]
+        
+          # If I move to a distance of <= 1 of the other ship: update valid non
+          # self destruct actions
+          distance = grid_distance(
+            new_row, new_col, other_row, other_col, grid_size)
+          if distance <= 1:
+            remove_dir = get_dir_from_target(
+              other_row, other_col, new_row, new_col, grid_size)[0]
+            if remove_dir in ship_non_self_destructive_actions[other_ship_k]:
+              ship_non_self_destructive_actions[other_ship_k].remove(remove_dir)
+            
+              if len(ship_non_self_destructive_actions[other_ship_k]) == 1:
+                rearrange_self_destruct_ships.append(other_ship_k)
+            
+      # Place ships that only have a single non destruct action to the front of
+      # the queue.
+      if rearrange_self_destruct_ships:
+        remaining_ships = [s for s in ordered_ship_plans[(i+1):] if (
+          s not in rearrange_self_destruct_ships)]
+        
+        ordered_ship_plans = ordered_ship_plans[:(i+1)] + (
+          rearrange_self_destruct_ships) + remaining_ships
   
   return (ship_actions, remaining_budget, my_next_ships, obs_halite,
           updated_ship_pos)
@@ -1621,7 +1832,7 @@ def decide_existing_base_spawns(
     row, col = row_col_from_square_grid_pos(player_obs[1][base_k], grid_size)
     
     # Don't spawn when there will be a ship at the base
-    spawn_scores[i] -= 1e9*my_next_ships[row, col]
+    spawn_scores[i] -= 1e12*my_next_ships[row, col]
     
     # Don't spawn when there is a returning ship that wants to enter the base
     # in two steps
@@ -1698,8 +1909,9 @@ def get_config_actions(config, observation, player_obs, env_config,
   ignore_bad_attack_directions = max_aggressive_attackers > 0
   
   # Compute the ship scores for all high level actions
-  ship_scores = get_ship_scores(config, observation, player_obs, env_config,
-                                np_rng, ignore_bad_attack_directions, verbose)
+  ship_scores, opponent_ships_sensible_actions = get_ship_scores(
+    config, observation, player_obs, env_config, np_rng,
+    ignore_bad_attack_directions, verbose)
   
   # Compute the coordinated high level ship plan
   ship_plans, my_next_bases, plan_ship_scores, base_attackers = get_ship_plans(
@@ -1709,9 +1921,9 @@ def get_config_actions(config, observation, player_obs, env_config,
   # Translate the ship high level plans to basic move/convert actions
   (mapped_actions, remaining_budget, my_next_ships, my_next_halite,
    updated_ship_pos) = map_ship_plans_to_actions(
-     config, observation, player_obs, env_config, verbose, ship_scores,
-     plan_ship_scores, ship_plans, np_rng, ignore_bad_attack_directions,
-     base_attackers, steps_remaining)
+     config, observation, player_obs, env_config, verbose, plan_ship_scores,
+     ship_scores, ship_plans, np_rng, ignore_bad_attack_directions, base_attackers,
+     steps_remaining, opponent_ships_sensible_actions)
   
   # Decide for all bases whether to spawn or keep the base available
   base_actions, remaining_budget = decide_existing_base_spawns(
@@ -1731,7 +1943,7 @@ def get_config_actions(config, observation, player_obs, env_config,
     'player_obs': player_obs,
     }
   
-  # if observation['step'] == 28:
+  # if observation['step'] == 197:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, halite_spent, step_details
