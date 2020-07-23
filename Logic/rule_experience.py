@@ -254,18 +254,12 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
     num_agents, halite_scores, episode_step, max_episode_steps, env)
     
   # Evaluate why the game evolved as it did
+  import pdb; pdb.set_trace()
+  action_override_counts = np.array([first_agent_step_details[i][
+    'action_overrides'] for i in range(len(first_agent_step_details))])
+  
   # import pdb; pdb.set_trace()
-  # vals_5000 = np.where(halite_scores[:, 0] == 5000)[0]
-  # last_5000 = vals_5000[vals_5000 < 10][-1]
-  # if not np.any(halite_scores[:, 0] == 0):
-  #   first_zero = 0
-  # else:
-  #   first_zero = np.where(halite_scores[:, 0] == 0)[0][0]
-  # if first_zero - last_5000 != 10:
-  #   print("Env error random seed: {}".format(env_random_seed))
-  #   print("Agent error random seeds: {}".format(act_random_seeds))
-  #   # import pdb; pdb.set_trace()
-  #   # x = 1
+  print("action_override_count:", action_override_counts.sum(0))
     
   # Obtain the terminal rewards for all agents
   episode_rewards = get_episode_rewards(halite_scores)
