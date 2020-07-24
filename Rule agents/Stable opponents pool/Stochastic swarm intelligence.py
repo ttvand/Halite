@@ -366,7 +366,7 @@ movement_tactics_amount = len(movement_tactics)
 
 
 #THE_SWARM####################################################
-def swarm_agent(observation, configuration):
+def swarm_agent(observation, configuration, **kwargs):
     """ RELEASE THE SWARM!!! """
     s_env = adapt_environment(observation, configuration)
     actions = actions_of_ships(s_env)

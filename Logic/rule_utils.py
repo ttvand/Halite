@@ -73,6 +73,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Self play rule_actions_v2 optimum 4 additional rules 5': 2,
     'Self play rule_actions_v2 optimum 4 additional rules 6': 2,
     'Self play rule_actions_v2 optimum 4 additional rules 7': 2,
+    'rule actions v2 optimum 4 additional rules 7 no base attack': 3,
     'Optimus mine': 3,
     'Self play rule_actions_v2 optimum 4 additional rules 9': 2,
     'rule actions v2 optimum 4 additional rules 10 aggressive': 2,
@@ -225,7 +226,8 @@ def write_experience_data(experiment_name, data):
 
 def plot_reward_versus_features(
     features_rewards_path, data, plot_name_suffix,
-    target_col="episode_reward", include_all_targets=False, all_scatter=False):
+    target_col="episode_reward", include_all_targets=False, all_scatter=False,
+    num_cols=5):
   # data = pd.read_csv(features_rewards_path)
   folder, _ = tuple(features_rewards_path.rsplit('/', 1))
   plots_folder = os.path.join(folder, 'Plots')
@@ -237,12 +239,12 @@ def plot_reward_versus_features(
   targets_rounded = np.round(targets, 3)
   
   num_plots = len(other_columns)
-  grid_size = int(np.ceil(np.sqrt(num_plots)))
+  num_rows = int(np.ceil(num_plots/num_cols))
   fig = plt.figure(figsize=[3*6.4, 3*4.8])
   plt.subplots_adjust(hspace=0.8, wspace=0.4)
   
   for i, c in enumerate(other_columns):
-    ax = fig.add_subplot(grid_size, grid_size, i+1)
+    ax = fig.add_subplot(num_rows, num_cols, i+1)
     x_vals = data[c].values
     if not all_scatter and np.abs(
         x_vals - x_vals.astype(np.int)).mean() < 1e-8:

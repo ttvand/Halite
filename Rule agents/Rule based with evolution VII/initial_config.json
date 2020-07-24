@@ -2,7 +2,7 @@
     "max_pool_size": 30,
     "num_games_previous_pools": 0,
     "num_games_evaluation": 0,
-    "num_games_fixed_opponents_pool": 50,
+    "num_games_fixed_opponents_pool": 150,
     "max_experience_buffer": 10000,
     "min_new_iteration_win_rate": 0.6,
     "record_videos_new_iteration": true,
@@ -11,10 +11,10 @@
     "use_multiprocessing": true,
     "play_fixed_pool_only": true,
     "play_fixed_pool_fit_prev_data": true,
-    "fixed_opponents_num_repeat_first_configs": 50,
+    "fixed_opponents_num_repeat_first_configs": 150,
     "deterministic_games": true,
     "num_agents_per_game": 4,
-    "pool_name": "Rule based with evolution VI",
+    "pool_name": "Rule based with evolution VII",
     "initial_config_ranges": {
         "halite_config_setting_divisor": [
             [
@@ -22,14 +22,6 @@
                 1.0000000001
             ],
             "float",
-            0
-        ],
-        "min_spawns_after_conversions": [
-            [
-                0,
-                2
-            ],
-            "int",
             0
         ],
         "collect_smoothed_multiplier": [
@@ -290,8 +282,8 @@
         ],
         "remaining_budget_spawn_constant": [
             [
-                0.1,
-                0.3
+                0.2,
+                0.20001
             ],
             "float",
             0
@@ -363,7 +355,7 @@
         "max_spawn_relative_step_divisor": [
             [
                 100.0,
-                400.0
+                100.001
             ],
             "float",
             1
