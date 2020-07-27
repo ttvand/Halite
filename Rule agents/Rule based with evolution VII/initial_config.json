@@ -298,7 +298,7 @@
         ],
         "boxed_in_halite_convert_divisor": [
             [
-                1.5,
+                1.0,
                 5.0
             ],
             "float",
@@ -336,13 +336,13 @@
             "float",
             0
         ],
-        "influence_weights_multiplier": [
+        "influence_weights_additional_multiplier": [
             [
-                1.0,
+                0.0,
                 5.0
             ],
             "float",
-            1
+            0
         ],
         "influence_weights_exponent": [
             [

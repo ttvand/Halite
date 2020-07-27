@@ -1,5 +1,4 @@
 import numpy as np
-import random
 
 #FUNCTIONS###################################################
 def get_map(obs):
@@ -94,7 +93,7 @@ def boarding(x_initial, y_initial, ship_id, actions, s_env, ship_index):
                 direction_x = x
                 direction_y = y
     # if hostile ship is there, has enough halite and safe for boarding
-    if biggest_prize != None and np.random.uniform() < chase_probability:
+    if biggest_prize != None and s_env["np_rng"].uniform() < s_env["chase_probability"]:
         actions[ship_id] = direction
         s_env["map"][x_initial][y_initial]["ship"] = None
         s_env["map"][direction_x][direction_y]["ship_cargo"] = -1
@@ -230,7 +229,7 @@ def define_some_globals(configuration):
     max_moves_amount = conf.size
     globals_not_defined = False
 
-def adapt_environment(observation, configuration):
+def adapt_environment(observation, configuration, spawn_limit, chase_probability, np_rng):
     """ adapt environment for the Swarm """
     s_env = {}
     s_env["obs"] = observation
@@ -242,6 +241,9 @@ def adapt_environment(observation, configuration):
     s_env["ships_keys"] = list(s_env["obs"].players[s_env["obs"].player][2].keys())
     s_env["ships_values"] = list(s_env["obs"].players[s_env["obs"].player][2].values())
     s_env["shipyards_keys"] = list(s_env["obs"].players[s_env["obs"].player][1].keys())
+    s_env["spawn_limit"] = spawn_limit
+    s_env["chase_probability"] = chase_probability
+    s_env["np_rng"] = np_rng
     return s_env
     
 def actions_of_ships(s_env):
@@ -256,7 +258,7 @@ def actions_of_ships(s_env):
         if s_env["ships_keys"][i] not in ships_data:
             ships_data[s_env["ships_keys"][i]] = {
                 "moves_done": 0,
-                "ship_max_moves": random.randint(1, max_moves_amount),
+                "ship_max_moves": s_env["np_rng"].randint(1, max_moves_amount),
                 "directions": movement_tactics[movement_tactics_index]["directions"],
                 "directions_index": 0
             }
@@ -286,7 +288,7 @@ def actions_of_shipyards(actions, s_env):
     # spawn ships from every shipyard, if possible
     # iterate through shipyards starting from last created
     for i in range(len(s_env["swarm_shipyards_coords"]))[::-1]:
-        if s_env["swarm_halite"] >= conf.spawnCost and ships_amount < spawn_limit:
+        if s_env["swarm_halite"] >= conf.spawnCost and ships_amount < s_env["spawn_limit"]:
             x = s_env["swarm_shipyards_coords"][i][0]
             y = s_env["swarm_shipyards_coords"][i][1]
             # if there is currently no ship on shipyard
@@ -312,10 +314,6 @@ ships_data = {}
 movement_tactics_index = 0
 # amount of halite, that is considered to be low
 low_amount_of_halite = 50
-# limit of ships to spawn - MADE STOCHASTIC BY TOM
-spawn_limit = random.choice([10 + i for i in range(15)])
-# TOM ADDED: probability of chasing a nearby ship with more halite
-chase_probability = np.random.uniform(0.5, 1.0)
 # not all global variables are defined
 globals_not_defined = True
 
@@ -368,7 +366,15 @@ movement_tactics_amount = len(movement_tactics)
 #THE_SWARM####################################################
 def swarm_agent(observation, configuration, **kwargs):
     """ RELEASE THE SWARM!!! """
-    s_env = adapt_environment(observation, configuration)
+    rng_action_seed = kwargs.get('rng_action_seed', 0)
+    np_rng = np.random.RandomState(rng_action_seed)
+    # limit of ships to spawn - MADE STOCHASTIC BY TOM
+    spawn_limit = np_rng.randint(10, 25)
+    # TOM ADDED: probability of chasing a nearby ship with more halite
+    chase_probability = np_rng.uniform(0.5, 1.0)
+    np_rng = np.random.RandomState(int(rng_action_seed+observation.step))
+
+    s_env = adapt_environment(observation, configuration, spawn_limit, chase_probability, np_rng)
     actions = actions_of_ships(s_env)
     actions = actions_of_shipyards(actions, s_env)
 

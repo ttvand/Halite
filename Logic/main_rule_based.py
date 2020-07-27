@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 34 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 150
 config = {
@@ -23,7 +23,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': False,
+  'use_multiprocessing': True,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
@@ -77,13 +77,13 @@ config = {
     'remaining_budget_spawn_constant': ((0.2, 0.20001), "float", 0),
     'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
     
-    'boxed_in_halite_convert_divisor': ((1.5, 5.0), "float", 1),
+    'boxed_in_halite_convert_divisor': ((1.0, 5.0), "float", 1),
     'n_step_avoid_min_die_prob_cutoff': ((0.0, 0.2), "float", 0),
     'n_step_avoid_window_size': ((5, 9), "int", 3),
     'influence_map_base_weight': ((1.0, 3.0), "float", 0),
     'influence_map_min_ship_weight': ((0.0, 0.8), "float", 0),
     
-    'influence_weights_multiplier': ((1.0, 5.0), "float", 1),
+    'influence_weights_additional_multiplier': ((0.0, 5.0), "float", 0),
     'influence_weights_exponent': ((3.0, 9.0), "float", 1),
     'max_spawn_relative_step_divisor': ((100.0, 100.001), "float", 1),
     }
@@ -297,12 +297,14 @@ def main_rule_utils(config, main_loop_seed=MAIN_LOOP_INITIAL_SEED):
 
       config_override_agents = (
         fixed_opponents_experience[-1].config_game_agents)
+      # import pdb; pdb.set_trace()
       rule_utils.record_videos(
         rules_config_path, config['num_agents_per_game'],
         extension_override=str(datetime.now())[:19],
         config_override_agents=config_override_agents,
         env_seed_deterministic=fixed_opponents_experience[0].env_random_seed,
         rng_action_seeds=fixed_opponents_experience[0].act_random_seeds,
+        first_game_recording=fixed_opponents_experience[0].game_recording,
         deterministic_games=config['deterministic_games'],
         deterministic_extension=f" - Seed {main_loop_seed}")
     else:

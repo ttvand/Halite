@@ -1266,6 +1266,9 @@ def map_ship_plans_to_actions(
         # future options (e.g. prefer to move diagonally towards the base (?))
         # This is probably bad near the base since the current behavior makes
         # it hard to attack.
+        if len(valid_actions) > 1:
+          # Do this in order to obtain reproducible results
+          valid_actions.sort()
         action = str(np_rng.choice(valid_actions))
         action = None if action == 'None' else action
       else:
@@ -1287,6 +1290,12 @@ def map_ship_plans_to_actions(
             valid_not_bad_actions.remove(None)
               
         if valid_not_bad_actions:
+          if len(valid_not_bad_actions) > 1:
+            # Do this in order to obtain reproducible results
+            valid_not_bad_actions = [str(a) for a in valid_not_bad_actions]
+            valid_not_bad_actions.sort()
+            valid_not_bad_actions = [
+              a if a != "None" else None for a in valid_not_bad_actions]
           action = np_rng.choice(valid_not_bad_actions)
         else:
           # Pick a random, not bad moving action

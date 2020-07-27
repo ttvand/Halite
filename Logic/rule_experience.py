@@ -26,6 +26,7 @@ ExperienceGame = recordtype('ExperienceGame', [
   'env_random_seed',
   'act_random_seeds',
   # 'first_agent_step_details',
+  'game_recording',
   ])
 
 
@@ -176,7 +177,7 @@ def update_terminal_halite_scores(num_agents, halite_scores, episode_step,
 
 def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
                                    verbose, game_id, env_random_seed,
-                                   act_random_seeds):
+                                   act_random_seeds, record_game):
   episode_start_time = time.time()
   
   # Generate reproducible data for better debugging
@@ -259,7 +260,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
     'action_overrides'] for i in range(len(first_agent_step_details))])
   
   # import pdb; pdb.set_trace()
-  print("action_override_count:", action_override_counts.sum(0))
+  print("action_override_counts:", action_override_counts.sum(0))
     
   # Obtain the terminal rewards for all agents
   episode_rewards = get_episode_rewards(halite_scores)
@@ -267,6 +268,12 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
   # Obtain the terminal number of ships and bases for all agents
   terminal_num_bases, terminal_num_ships = get_base_and_ship_counts(env)
   terminal_halite = halite_scores[-1].tolist()
+  
+  # Generate the episode recording if requested
+  if record_game:
+    game_recording = env.render(mode="html", width=800, height=600)
+  else:
+    game_recording = None
   
   # Store the game data
   this_game_data = ExperienceGame(
@@ -287,6 +294,7 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
         env_random_seed,
         act_random_seeds,
         # first_agent_step_details,
+        game_recording,
         )
   
   episode_duration = time.time() - episode_start_time
@@ -344,6 +352,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
   n_opponent_id_names = []
   n_env_random_seeds = []
   n_act_random_seeds = []
+  n_record_games = []
   for i in range(num_games):
     game_agent_paths, game_agents, opponent_ids, opponent_id_names = (
       get_game_agents(this_agent, other_agents, opponent_names, num_agents,
@@ -363,15 +372,17 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     n_opponent_id_names.append(opponent_id_names)
     n_env_random_seeds.append(int(env_random_seeds[i]))
     n_act_random_seeds.append(act_random_seeds[i])
+    n_record_games.append(i == 0)
   
   if use_multiprocessing:
     with mp.Pool(processes=mp.cpu_count()-1) as pool:
       results = [pool.apply_async(
                   collect_experience_single_game, args=(
                     gap, ga, num_agents, verbose, g, ers,
-                    ars)) for (gap, ga, g, ers, ars) in zip(
+                    ars, rg)) for (gap, ga, g, ers, ars, rg) in zip(
                       n_game_agent_paths, n_game_agents, np.arange(num_games),
-                      n_env_random_seeds, n_act_random_seeds)]
+                      n_env_random_seeds, n_act_random_seeds,
+                      n_record_games)]
       game_outputs = [p.get() for p in results]
   else:
     game_outputs = []
@@ -379,7 +390,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
       single_game_outputs = collect_experience_single_game(
           n_game_agent_paths[game_id], n_game_agents[game_id], num_agents,
           verbose, game_id, n_env_random_seeds[game_id],
-          n_act_random_seeds[game_id])
+          n_act_random_seeds[game_id], n_record_games[game_id])
       game_outputs.append(single_game_outputs)
     
   (n_this_game_data, n_episode_duration) = list(

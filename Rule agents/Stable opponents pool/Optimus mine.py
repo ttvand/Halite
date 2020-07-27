@@ -9,7 +9,6 @@ import scipy.optimize
 import scipy.ndimage
 from kaggle_environments.envs.halite.helpers import *
 import kaggle_environments
-import random
 '''
 Initialization code can run when the file is loaded.  The first call to agent() is allowed 30 sec
 The agent function is the last function in the file (does not matter its name)
@@ -401,7 +400,7 @@ def ship_converts(board):
       turn.num_shipyards+=1
       turn.total_halite-=500
       
-def ship_moves(board):
+def ship_moves(board, np_rng):
   ships=[ship for ship in me.ships if ship.next_action is None]
   #update ship_target
   assign_targets(board,ships)
@@ -412,7 +411,7 @@ def ship_moves(board):
       a,delta = dirs_to(ship.position, ship_target[ship.id],size=size)
       actions[ship.id]=a
     else:
-      actions[ship.id]=[random.choice(all_actions)]
+      actions[ship.id]=[np_rng.choice(all_actions)]
       
   for ship in ships:
     action=None
@@ -444,6 +443,7 @@ def ship_moves(board):
     
 # Returns the commands we send to our ships and shipyards, must be last function in file
 def agent(obs, config, **kwargs):
+#  print("Optimus mine!")
   global size
   global start
   global prev_board
@@ -463,7 +463,8 @@ def agent(obs, config, **kwargs):
   print('ships {} shipyards {}'.format(turn.num_ships,turn.num_shipyards))
   print_enemy_ships(board)
   ship_converts(board)
-  ship_moves(board)
+  rng_action_seed = kwargs.get('rng_action_seed', 0)
+  ship_moves(board, np.random.RandomState(int(rng_action_seed+obs.step)))
   shipyard_actions()
   print_actions(board)
   print('time this turn: {:8.3f} total elapsed {:8.3f}'.format(time.time()-start_step,time.time()-start))

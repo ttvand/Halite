@@ -484,7 +484,7 @@ def fixed_pool_sample_probs(opponent_names):
 def record_videos(agent_path, num_agents_per_game, rng_action_seeds,
                   extension_override=None, config_override_agents=None,
                   deterministic_games=False, env_seed_deterministic=0,
-                  deterministic_extension=None):
+                  deterministic_extension=None, first_game_recording=None):
   print("Generating videos of iteration {}".format(agent_path))
   env_configuration = {"agentExec": "LOCAL"}
   if deterministic_games:
@@ -525,19 +525,23 @@ def record_videos(agent_path, num_agents_per_game, rng_action_seeds,
     lambda observation: my_agent(observation, 3),
     ][:num_agents_per_game]
   
-  for video_type in ["self play", "random opponent"]:
-    env.reset(num_agents=num_agents_per_game)
-    agents = config_id_agents if video_type == "self play" else [
-      config_id_agents[0]] + ["random"]*(num_agents_per_game-1)
-    
-    env.run(agents)
-    
+  for video_type in ["self play", "random opponent"][:1]:
+    original_video_type = video_type
     if config_override_agents is not None and video_type == "self play":
       video_type = "; ".join([
         a.rsplit('/', 1)[-1][:-3] for a in config_override_agents[1:]])
     
+    if original_video_type == "self play" and first_game_recording is not None:
+      game_recording = first_game_recording
+    else:
+      env.reset(num_agents=num_agents_per_game)
+      agents = config_id_agents if original_video_type == "self play" else [
+        config_id_agents[0]] + ["random"]*(num_agents_per_game-1)
+      
+      env.run(agents)
+      game_recording = env.render(mode="html", width=800, height=600)
+      
     # Save the HTML recording in the videos folder
-    game_recording = env.render(mode="html", width=800, height=600)
     folder, extension = tuple(agent_path.rsplit('/', 1))
     videos_folder = os.path.join(folder, 'Videos')
     Path(videos_folder).mkdir(parents=True, exist_ok=True)
