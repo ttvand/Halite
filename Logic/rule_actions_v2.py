@@ -680,10 +680,12 @@ def get_valid_opponent_ship_actions(rewards_bases_ships, halite_ships, size):
 
 def scale_attack_scores_bases(
     config, observation, player_obs, spawn_cost, main_base_distances,
-    laplace_smoother_rel_ship_count=4, initial_normalize_ship_diff=10,
-    final_normalize_ship_diff=2):
-  stacked_opponent_bases = np.stack([rbs[1] for rbs in observation[
-    'rewards_bases_ships']])[1:]
+    weighted_base_mask, laplace_smoother_rel_ship_count=4,
+    initial_normalize_ship_diff=10, final_normalize_ship_diff=2):
+  stacked_bases = np.stack([rbs[1] for rbs in observation[
+    'rewards_bases_ships']])
+  my_bases = stacked_bases[0]
+  stacked_opponent_bases = stacked_bases[1:]
   stacked_opponent_ships = np.stack([rbs[2] for rbs in observation[
     'rewards_bases_ships']])[1:]
   ship_halite_per_player = np.stack([rbs[3] for rbs in observation[
@@ -714,7 +716,9 @@ def scale_attack_scores_bases(
   # Additional term: attack bases nearby my main base
   opponent_bases = stacked_opponent_bases.sum(0).astype(np.bool)
   if opponent_bases.sum() > 0 and main_base_distances.max() > 0:
-    additive_nearby_main_base = 5/(1.5**main_base_distances)
+    # TODO: tune these weights - maybe add them to the config
+    additive_nearby_main_base = 5/(1.5**main_base_distances)/(
+      weighted_base_mask[my_bases].sum())
     additive_nearby_main_base[~opponent_bases] = 0
   else:
     additive_nearby_main_base = 0
@@ -876,7 +880,8 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   
   # Scale the opponent bases as a function of attack desirability
   opponent_bases_scaled = scale_attack_scores_bases(
-      config, observation, player_obs, spawn_cost, main_base_distances)
+      config, observation, player_obs, spawn_cost, main_base_distances,
+      weighted_base_mask)
 
   # Get the influence map
   influence_map, priority_scores, ship_priority_weights = get_influence_map(
