@@ -175,9 +175,9 @@ def update_terminal_halite_scores(num_agents, halite_scores, episode_step,
   
   return halite_scores
 
-def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
-                                   verbose, game_id, env_random_seed,
-                                   act_random_seeds, record_game):
+def collect_experience_single_game(
+    game_agent_paths, game_agents, num_agents, verbose, game_id,
+    env_random_seed, act_random_seeds, record_game, episode_steps_override):
   episode_start_time = time.time()
   
   # Generate reproducible data for better debugging
@@ -188,9 +188,10 @@ def collect_experience_single_game(game_agent_paths, game_agents, num_agents,
   config_game_agents = [a if isinstance(a, dict) else "text_agent" for a in (
     game_agents)]
   
-  env = make_environment('halite',
-                          configuration = {"randomSeed": env_random_seed}
-                         )
+  env_config = {"randomSeed": env_random_seed}
+  if episode_steps_override is not None:
+    env_config["episodeSteps"] = episode_steps_override
+  env = make_environment('halite', configuration=env_config)
   env.reset(num_agents=num_agents)
   max_episode_steps = env.configuration.episodeSteps
   halite_scores = np.full((max_episode_steps, num_agents), np.nan)
@@ -311,7 +312,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
                record_videos_new_iteration=False,
                max_pool_size_exclude_current_from_opponent=5,
                use_multiprocessing=False, num_repeat_first_configs=1,
-               first_config_overrides=None):
+               first_config_overrides=None, episode_steps_override=None):
   (this_agent, other_agents, agents_full_paths,
    opponent_names) = load_pool_agents(
     pool_name, max_pool_size, exclude_current_from_opponents,
@@ -379,10 +380,11 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
       results = [pool.apply_async(
                   collect_experience_single_game, args=(
                     gap, ga, num_agents, verbose, g, ers,
-                    ars, rg)) for (gap, ga, g, ers, ars, rg) in zip(
-                      n_game_agent_paths, n_game_agents, np.arange(num_games),
-                      n_env_random_seeds, n_act_random_seeds,
-                      n_record_games)]
+                    ars, rg, episode_steps_override)) for (
+                      gap, ga, g, ers, ars, rg) in zip(
+                        n_game_agent_paths, n_game_agents,
+                        np.arange(num_games), n_env_random_seeds,
+                        n_act_random_seeds, n_record_games)]
       game_outputs = [p.get() for p in results]
   else:
     game_outputs = []
@@ -390,7 +392,8 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
       single_game_outputs = collect_experience_single_game(
           n_game_agent_paths[game_id], n_game_agents[game_id], num_agents,
           verbose, game_id, n_env_random_seeds[game_id],
-          n_act_random_seeds[game_id], n_record_games[game_id])
+          n_act_random_seeds[game_id], n_record_games[game_id],
+          episode_steps_override)
       game_outputs.append(single_game_outputs)
     
   (n_this_game_data, n_episode_duration) = list(
