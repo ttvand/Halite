@@ -313,6 +313,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
                max_pool_size_exclude_current_from_opponent=5,
                use_multiprocessing=False, num_repeat_first_configs=1,
                first_config_overrides=None, episode_steps_override=None):
+  num_skipped = 0 # ONLY USE THIS FOR DEBUGGING
   (this_agent, other_agents, agents_full_paths,
    opponent_names) = load_pool_agents(
     pool_name, max_pool_size, exclude_current_from_opponents,
@@ -373,7 +374,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     n_opponent_id_names.append(opponent_id_names)
     n_env_random_seeds.append(int(env_random_seeds[i]))
     n_act_random_seeds.append(act_random_seeds[i])
-    n_record_games.append(i == 0)
+    n_record_games.append(i == num_skipped)
   
   if use_multiprocessing:
     with mp.Pool(processes=mp.cpu_count()-1) as pool:
@@ -382,13 +383,17 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
                     gap, ga, num_agents, verbose, g, ers,
                     ars, rg, episode_steps_override)) for (
                       gap, ga, g, ers, ars, rg) in zip(
-                        n_game_agent_paths, n_game_agents,
-                        np.arange(num_games), n_env_random_seeds,
-                        n_act_random_seeds, n_record_games)]
+                        n_game_agent_paths[num_skipped:],
+                        n_game_agents[num_skipped:],
+                        np.arange(num_games)[num_skipped:],
+                        n_env_random_seeds[num_skipped:],
+                        n_act_random_seeds[num_skipped:],
+                        n_record_games[num_skipped:])]
       game_outputs = [p.get() for p in results]
+      
   else:
     game_outputs = []
-    for game_id in range(num_games):
+    for game_id in range(num_skipped, num_games):
       single_game_outputs = collect_experience_single_game(
           n_game_agent_paths[game_id], n_game_agents[game_id], num_agents,
           verbose, game_id, n_env_random_seeds[game_id],
@@ -398,9 +403,9 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     
   (n_this_game_data, n_episode_duration) = list(
     zip(*[p for p in game_outputs]))
-  for game_id in range(num_games):
+  for game_id in range(num_skipped, num_games):
     # Obtain the terminal rewards for all agents
-    this_game_data = n_this_game_data[game_id]
+    this_game_data = n_this_game_data[game_id-num_skipped]
     episode_rewards = this_game_data.episode_rewards
     opponent_ids = n_opponent_ids[game_id]
     this_game_data.opponent_names = n_opponent_id_names[game_id]

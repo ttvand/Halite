@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 8 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = {
@@ -55,7 +55,7 @@ config = {
   #   'attack_base_multiplier': ((0.0, 500.0), "float", 0),
   
   #   'attack_base_less_halite_ships_multiplier_base': ((0.8, 1.0), "float", 0),
-  #   'attack_base_halite_sum_multiplier': ((0.1, 2.0), "float", 0),
+  #   'attack_base_halite_sum_multiplier': ((1.0, 3.0), "float", 0),
   #   'attack_base_run_enemy_multiplier': ((0.1, 2.0), "float", 0),
   #   'attack_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
   #   'collect_run_enemy_multiplier': ((5.0, 15.0), "float", 0),
@@ -108,7 +108,7 @@ config = {
     'attack_base_multiplier': 200.0,
     
     'attack_base_less_halite_ships_multiplier_base': 0.9,
-    'attack_base_halite_sum_multiplier': 1.0, #*0,
+    'attack_base_halite_sum_multiplier': 2.0, #*0,
     'attack_base_run_enemy_multiplier': 1.0,
     'attack_base_catch_enemy_multiplier': 1.0,
     'collect_run_enemy_multiplier': 10.0,

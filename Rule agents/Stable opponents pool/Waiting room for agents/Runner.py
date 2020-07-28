@@ -1315,7 +1315,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   defend_base_ignore_collision_key = None
   ignore_base_collision_ship_keys = []
   should_defend = my_ship_count > min(4, 2 + steps_remaining/5)
-  if num_bases == 1 and should_defend:
+  if False and num_bases == 1 and should_defend:
     (all_ship_scores, defend_base_ignore_collision_key,
      last_base_protected, ignore_base_collision_ship_keys) = protect_last_base(
        observation, env_config, all_ship_scores, player_obs)
@@ -1422,7 +1422,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   ship_order = np.argsort(-ship_priority_scores)
   occupied_target_squares = []
   occupied_squares_count = {}
-  single_path_squares = np.zeros((grid_size, grid_size), dtype=np.bool)
+  single_path_squares = np.copy(my_bases)
   single_path_max_block_distances = np.ones(
     (grid_size, grid_size), dtype=np.int)
   return_base_distances = []
@@ -1831,7 +1831,7 @@ def map_ship_plans_to_actions(
   # List all positions you definitely don't want to move to. Initially this
   # only contains enemy bases and eventually also earlier ships.
   bad_positions = np.stack([rbs[1] for rbs in observation[
-    'rewards_bases_ships']])[1:].sum(0)
+    'rewards_bases_ships']]).sum(0)
   
   # Order the ship plans based on the available valid direction count. Break
   # ties using the original order.
