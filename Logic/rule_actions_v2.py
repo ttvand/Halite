@@ -13,6 +13,8 @@ SPAWN = "SPAWN"
 MOVE_DIRECTIONS = [None, NORTH, SOUTH, EAST, WEST]
 RELATIVE_DIR_MAPPING = {None: (0, 0), NORTH: (-1, 0), SOUTH: (1, 0),
                         EAST: (0, 1), WEST: (0, -1)}
+RELATIVE_DIR_TO_DIRECTION_MAPPING = {
+  v: k for k, v in RELATIVE_DIR_MAPPING.items()}
 OPPOSITE_MAPPING = {None: None, NORTH: SOUTH, SOUTH: NORTH, EAST: WEST,
                     WEST: EAST}
 RELATIVE_DIRECTIONS = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]
@@ -51,6 +53,8 @@ HALF_PLANES_CATCH = {}
 HALF_PLANES_RUN = {}
 ROW_COL_DISTANCE_MASKS = {}
 ROW_COL_MAX_DISTANCE_MASKS = {}
+ROW_COL_BOX_MAX_DISTANCE_MASKS = {}
+BOX_DIRECTION_MASKS = {}
 DISTANCE_MASK_DIM = 21
 half_distance_mask_dim = int(DISTANCE_MASK_DIM/2)
 for row in range(DISTANCE_MASK_DIM):
@@ -121,6 +125,28 @@ for row in range(DISTANCE_MASK_DIM):
 
     for d in range(half_distance_mask_dim):
       ROW_COL_MAX_DISTANCE_MASKS[(row, col, d)] = manh_distance <= d
+      ROW_COL_BOX_MAX_DISTANCE_MASKS[(row, col, d)] = np.logical_and(
+        horiz_distance <= d, vert_distance <= d)
+      
+    for dist in range(2, 5):
+      dist_mask_dim = dist*2+1
+      row_pos = np.tile(np.expand_dims(np.arange(dist_mask_dim), 1),
+                        [1, dist_mask_dim])
+      col_pos = np.tile(np.arange(dist_mask_dim), [dist_mask_dim, 1])
+      for direction in MOVE_DIRECTIONS[1:]:
+        if direction == NORTH:
+          box_mask = (row_pos < dist) & (
+            np.abs(col_pos-dist) <= (dist-row_pos))
+        if direction == SOUTH:
+          box_mask = (row_pos > dist) & (
+            np.abs(col_pos-dist) <= (row_pos-dist))
+        if direction == WEST:
+          box_mask = (col_pos < dist) & (
+            np.abs(row_pos-dist) <= (dist-col_pos))
+        if direction == EAST:
+          box_mask = (col_pos > dist) & (
+            np.abs(row_pos-dist) <= (col_pos-dist))
+        BOX_DIRECTION_MASKS[(dist, direction)] = box_mask
       
 def row_col_from_square_grid_pos(pos, size):
   col = pos % size
@@ -857,6 +883,309 @@ def force_return_base_end_episode(
     
   return base_return_grid_multiplier, end_game_base_return
 
+def edge_aware_square_subset_mask(data, row, col, window, box, grid_size):
+  # Figure out how many rows to roll the data and box to end up with a
+  # contiguous subset
+  min_row = row - window
+  max_row = row + window
+  if min_row < 0:
+    data = np.roll(data, -min_row, axis=0)
+    box = np.roll(box, -min_row, axis=0)
+  elif max_row >= grid_size:
+    data = np.roll(data, grid_size-max_row-1, axis=0)
+    box = np.roll(box, grid_size-max_row-1, axis=0)
+    
+  # Figure out how many columns to roll the data and box to end up with a
+  # contiguous subset
+  min_col = col - window
+  max_col = col + window
+  if min_col < 0:
+    data = np.roll(data, -min_col, axis=1)
+    box = np.roll(box, -min_col, axis=1)
+  elif max_col >= grid_size:
+    data = np.roll(data, grid_size-max_col-1, axis=1)
+    box = np.roll(box, grid_size-max_col-1, axis=1)
+    
+  return data[box]
+
+def update_scores_opponent_boxing_in(
+    ship_scores, stacked_ships, observation, opponent_ships_sensible_actions,
+    halite_ships, steps_remaining, player_obs, box_in_window=3):
+  # Loop over the opponent ships and derive if I can box them in
+  # For now this is just greedy. We should probably consider decoupling finding
+  # targets from actually boxing in.
+  opponent_positions = np.where(stacked_ships[1:].sum(0) > 0)
+  num_opponent_ships = opponent_positions[0].size
+  dist_mask_dim = 2*box_in_window+1
+  nearby_rows = np.tile(np.expand_dims(np.arange(dist_mask_dim), 1),
+                [1, dist_mask_dim])
+  nearby_cols = np.tile(np.arange(dist_mask_dim), [dist_mask_dim, 1])
+  ships_available = np.copy(stacked_ships[0])
+  grid_size = stacked_ships.shape[1]
+  ship_pos_to_key = {v[0]: k for k, v in player_obs[2].items()}
+  
+  for i in range(num_opponent_ships):
+    row = opponent_positions[0][i]
+    col = opponent_positions[1][i]
+    my_less_halite_mask = np.logical_and(
+      halite_ships < halite_ships[row, col], ships_available)
+    # Only consider zero halite ships towards the end of a game
+    my_less_halite_mask = np.logical_and(
+      my_less_halite_mask, np.logical_or(
+        halite_ships == 0, steps_remaining > 20))
+    box_pos = ROW_COL_BOX_MAX_DISTANCE_MASKS[row, col, box_in_window]
+    lowest_opponent_halite = halite_ships[
+      (~stacked_ships[0]) & (halite_ships >= 0) & box_pos].min()
+    my_less_halite_mask &= (halite_ships <= lowest_opponent_halite)
+    my_less_halite_mask_box = edge_aware_square_subset_mask(
+      my_less_halite_mask, row, col, np.copy(box_in_window), box_pos,
+      grid_size)
+    nearby_less_halite_mask = my_less_halite_mask_box.reshape(
+        (dist_mask_dim, dist_mask_dim))
+    my_num_nearby = nearby_less_halite_mask.sum()
+    if my_num_nearby >= 3:
+      # Check all directions to make sure I can box the opponent in
+      can_box_in = True
+      box_in_mask_dirs = np.zeros(
+        (4, dist_mask_dim, dist_mask_dim), dtype=np.bool)
+      for dim_id, d in enumerate(MOVE_DIRECTIONS[1:]):
+        dir_and_ships = BOX_DIRECTION_MASKS[(box_in_window, d)] & (
+          nearby_less_halite_mask)
+        if not np.any(dir_and_ships):
+          can_box_in = False
+          break
+        else:
+          box_in_mask_dirs[dim_id] = dir_and_ships
+        
+      if can_box_in:
+        # Sketch out the escape squares for the target ship
+        opponent_distances = np.abs(nearby_rows-box_in_window) + np.abs(
+          nearby_cols-box_in_window)
+        opponent_euclid_distances = np.sqrt(
+          (nearby_rows-box_in_window)**2 + (
+          nearby_cols-box_in_window)**2)
+        nearby_mask_pos = np.where(nearby_less_halite_mask)
+        my_nearest_distances = np.stack([np.abs(
+          nearby_rows-nearby_mask_pos[0][j]) + np.abs(
+          nearby_cols-nearby_mask_pos[1][j]) for j in range(
+            my_num_nearby)])
+        my_nearest_euclid_distances = np.stack([np.sqrt((
+          nearby_rows-nearby_mask_pos[0][j])**2 + (
+          nearby_cols-nearby_mask_pos[1][j])**2) for j in range(
+            my_num_nearby)])
+        
+        # No boxing in if the opponent has a base in one of the escape squares
+        escape_squares = opponent_distances < my_nearest_distances.min(0)
+        opponent_id = np.where(stacked_ships[:, row, col])[0][0]
+        if not np.any(observation['rewards_bases_ships'][opponent_id][1][
+            box_pos][escape_squares.flatten()]):
+          # Let's box the opponent in!
+          # We should move towards the opponent if we can do so without opening
+          # up an escape direction
+          print(observation['step'])
+          
+          # Order the planning by priority of direction and distance to the
+          # opponent
+          box_in_mask_dirs_sum = box_in_mask_dirs.sum((1, 2))
+          ship_priorities = np.zeros(my_num_nearby)
+          for j in range(my_num_nearby):
+            my_row = nearby_mask_pos[0][j]
+            my_col = nearby_mask_pos[1][j]
+            box_directions = box_in_mask_dirs[:, my_row, my_col]
+            opponent_distance = np.abs(my_row-box_in_window) + np.abs(
+              my_col-box_in_window)
+            ship_priorities[j] = 20/(
+              box_in_mask_dirs_sum[box_directions].prod())-opponent_distance
+          
+          # DISCERN if we are just chasing or actually attacking the ship in
+          # the next move - dummy rule to have at least K neighboring ships
+          # for us to attack the position of the targeted ship - this makes it
+          # hard to guess the escape direction
+          ship_target_1_distances = my_nearest_distances[
+            :, box_in_window, box_in_window] == 1
+          next_step_attack = len(
+            opponent_ships_sensible_actions[row, col]) == 0 and (
+              ship_target_1_distances.sum() > 2)
+              
+          pos_taken = np.zeros_like(dir_and_ships)
+          if next_step_attack:
+            # If there is a ship that can take the position of my attacker:
+            # attack with that ship and replace its position.
+            # Otherwise pick a random attacker and keep the others in place.
+            # Initial approach: don't move with ships at distance 1.
+            # TODO: add some randomness so that it is hard to escape.
+            ship_target_2_distance_ids = np.where(my_nearest_distances[
+              :, box_in_window, box_in_window] == 2)[0].tolist()
+            move_ids_directions_next_attack = []
+            
+            # Add the positions of the one step attackers
+            for one_step_diff_id in np.where(ship_target_1_distances)[0]:
+              my_row = nearby_mask_pos[0][one_step_diff_id]
+              my_col = nearby_mask_pos[1][one_step_diff_id]
+              pos_taken[my_row, my_col] = 1
+              
+            for two_step_diff_id in ship_target_2_distance_ids:
+              my_row = nearby_mask_pos[0][two_step_diff_id]
+              my_col = nearby_mask_pos[1][two_step_diff_id]
+              
+              # Consider the shortest directions towards the target
+              shortest_directions = get_dir_from_target(
+                my_row, my_col, box_in_window, box_in_window, grid_size=1000)
+              
+              has_selected_action = False
+              for d in shortest_directions:
+                move_row, move_col = move_ship_row_col(
+                  my_row, my_col, d, size=1000)
+                if pos_taken[move_row, move_col] and not pos_taken[
+                    box_in_window, box_in_window]:
+                  move_ids_directions_next_attack.append((
+                    two_step_diff_id, d))
+                  # Find the ids of the 1-step ship and make sure that ship
+                  # attacks
+                  replaced_id = np.where(my_nearest_distances[
+                    :, move_row, move_col] == 0)[0][0]
+                  one_step_attack_dir = get_dir_from_target(
+                    move_row, move_col, box_in_window, box_in_window,
+                    grid_size=1000)[0]
+                  move_ids_directions_next_attack.append((
+                    replaced_id, one_step_attack_dir))
+                  pos_taken[box_in_window, box_in_window] = True
+                  has_selected_action = True
+              if not has_selected_action:
+                # Try to take an available square
+                for d in shortest_directions:
+                  move_row, move_col = move_ship_row_col(
+                    my_row, my_col, d, size=1000)
+                  if not pos_taken[move_row, move_col]:
+                    move_ids_directions_next_attack.append((
+                      two_step_diff_id, d))
+                    break
+              
+              
+            if pos_taken[box_in_window, box_in_window]:
+              # Add the remaining one step attackers with stay in place actions
+              import pdb; pdb.set_trace()
+              x=1
+            else:
+              # Pick a random one step attacker to attack the target and make
+              # sure the remaining ships stay in place
+              import pdb; pdb.set_trace()
+              x=1
+          
+          covered_directions = np.zeros(4, dtype=bool)
+          ship_order = np.argsort(-ship_priorities)
+          box_in_mask_rem_dirs_sum = np.copy(box_in_mask_dirs_sum)
+          for j in range(my_num_nearby):
+            attack_id = ship_order[j]
+            my_row = nearby_mask_pos[0][attack_id]
+            my_col = nearby_mask_pos[1][attack_id]
+            my_abs_row = (row+my_row-box_in_window) % grid_size
+            my_abs_col = (col+my_col-box_in_window) % grid_size
+            ship_pos = my_abs_row*grid_size+my_abs_col
+            ship_k = ship_pos_to_key[ship_pos]
+            box_directions = box_in_mask_dirs[:, my_row, my_col]
+            opponent_distance = np.abs(my_row-box_in_window) + np.abs(
+              my_col-box_in_window)
+            box_in_mask_rem_dirs_sum[box_directions] -= 1
+            
+            # if observation['step'] == 54 and my_row == 3 and my_col == 4:
+            #   import pdb; pdb.set_trace()
+            
+            if next_step_attack:
+              # If there is a ship that can take the position of my attacker:
+              # attack with that ship and replace it's position.
+              # Initial approach: don't move with ships at distance 1.
+              # TODO: add some randomness so that it is hard to escape.
+              import pdb; pdb.set_trace()
+              one_distance_ships = 1
+            else:
+              num_covered_attacker = covered_directions[box_directions]
+              attack_dir_id = np.argmin(num_covered_attacker + 0.1*(
+                box_in_mask_rem_dirs_sum[box_directions]))
+              rel_pos_diff = (my_row-box_in_window, my_col-box_in_window)
+              attack_move_id = np.where(box_directions)[0][attack_dir_id]
+              attack_cover_dir = np.array(MOVE_DIRECTIONS[1:])[attack_move_id]
+              one_hot_cover_dirs = np.zeros(4, dtype=bool)
+              one_hot_cover_dirs[attack_move_id] = 1
+              other_dirs_covered = one_hot_cover_dirs | covered_directions | (
+                box_in_mask_rem_dirs_sum >= 0)
+              wait_reinforcements = not np.all(other_dirs_covered) or (
+                opponent_distance == 1)
+              if wait_reinforcements:
+                move_dir = None
+              else:
+                if covered_directions[attack_move_id]:
+                  # Move towards the target on the diagonal (empowerment)
+                  move_penalties = 0.001*opponent_euclid_distances**4 + (
+                    my_nearest_euclid_distances[attack_id]**4) + 1e3*pos_taken
+                  move_penalties[my_row, my_col] += 1e3
+                  best_penalty_pos = np.where(
+                    move_penalties == move_penalties.min())
+                  target_move_row = best_penalty_pos[0][0]
+                  target_move_col = best_penalty_pos[1][0]
+                  move_dir = get_dir_from_target(
+                    my_row, my_col, target_move_row, target_move_col,
+                    grid_size=1000)[0]
+                if attack_cover_dir == NORTH:
+                  if rel_pos_diff[1] == 0:
+                    move_dir = SOUTH
+                  elif rel_pos_diff[1] < 0:
+                    move_dir = EAST
+                  else:
+                    move_dir = WEST
+                elif attack_cover_dir == SOUTH:
+                  if rel_pos_diff[1] == 0:
+                    move_dir = NORTH
+                  elif rel_pos_diff[1] < 0:
+                    move_dir = EAST
+                  else:
+                    move_dir = WEST
+                elif attack_cover_dir == EAST:
+                  if rel_pos_diff[0] == 0:
+                    move_dir = WEST
+                  elif rel_pos_diff[0] < 0:
+                    move_dir = SOUTH
+                  else:
+                    move_dir = NORTH
+                elif attack_cover_dir == WEST:
+                  if rel_pos_diff[0] == 0:
+                    move_dir = EAST
+                  elif rel_pos_diff[0] < 0:
+                    move_dir = SOUTH
+                  else:
+                    move_dir = NORTH
+                    
+              # Increase the ship scores for the planned actions
+              move_row, move_col = move_ship_row_col(
+                my_abs_row, my_abs_col, move_dir, grid_size)
+              ship_scores[ship_k][0][move_row, move_col] = 1e10
+              
+              # Update the covered attack directions
+              moved_rel_dir = RELATIVE_DIR_MAPPING[move_dir]
+              new_rel_pos = (rel_pos_diff[0] + moved_rel_dir[0],
+                             rel_pos_diff[1] + moved_rel_dir[1])
+              new_grid_pos = (box_in_window + new_rel_pos[0],
+                              box_in_window + new_rel_pos[1])
+              
+              # print(my_abs_row, my_abs_col, move_dir)
+              if not new_rel_pos == (0, 0) and not pos_taken[new_grid_pos]:
+                pos_taken[new_grid_pos] = 1
+                for threat_dir in RELATIVE_DIRECTIONS[:-1]:
+                  nz_dim = int(threat_dir[0] == 0)
+                  dir_offset = new_rel_pos[nz_dim]*threat_dir[nz_dim]
+                  other_dir_abs_offset = np.abs(new_rel_pos[1-nz_dim])
+                  
+                  if dir_offset > 0 and other_dir_abs_offset < dir_offset:
+                    covered_id = np.where(
+                      RELATIVE_DIR_TO_DIRECTION_MAPPING[threat_dir] == (
+                        np.array(MOVE_DIRECTIONS[1:])))[0][0]
+                    covered_directions[covered_id] = 1
+          
+          # Flag the boxing in ships as unavailable for other hunts
+          ships_available[box_pos & my_less_halite_mask] = 0
+  
+  return ship_scores
+
 
 def get_ship_scores(config, observation, player_obs, env_config, np_rng,
                     ignore_bad_attack_directions, verbose):
@@ -899,7 +1228,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   my_ship_fraction = my_ship_count/(1e-9+all_ship_count)
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
-  halite_ships[stacked_ships.sum(0) == 0] = 1e-9
+  halite_ships[stacked_ships.sum(0) == 0] = -1e-9
   opponent_bases = stacked_bases[1:].sum(0)
   
   # Flag to indicate I should not occupy/flood my base with early ships
@@ -1046,7 +1375,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
       establish_base_scores[row, col] = 1e12*int(last_episode_step_convert)
     else:
       last_episode_step_convert = False
-        
+      
     ship_scores[ship_k] = (
       collect_grid_scores, base_return_grid_multiplier, establish_base_scores,
       attack_base_scores, preferred_directions, agent_surrounded,
@@ -1054,6 +1383,11 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
       one_step_valid_directions, opponent_base_directions, 0,
       end_game_base_return, last_episode_step_convert,
       n_step_bad_directions_die_probs)
+    
+  # Coordinate box in actions of opponent more halite ships
+  ship_scores = update_scores_opponent_boxing_in(
+    ship_scores, stacked_ships, observation, opponent_ships_sensible_actions,
+    halite_ships, steps_remaining, player_obs)
     
   return ship_scores, opponent_ships_sensible_actions, weighted_base_mask
 
@@ -1085,7 +1419,7 @@ def consider_restoring_base(
     [rbs[2] for rbs in observation['rewards_bases_ships']])
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
-  halite_ships[stacked_ships.sum(0) == 0] = 1e-9
+  halite_ships[stacked_ships.sum(0) == 0] = -1e-9
   opponent_bases = np.stack([rbs[1] for rbs in observation[
     'rewards_bases_ships']])[1:].sum(0)
   opponent_ships = np.stack([
@@ -1197,7 +1531,7 @@ def protect_last_base(observation, env_config, all_ship_scores, player_obs,
       [rbs[2] for rbs in observation['rewards_bases_ships']])
     halite_ships = np.stack([
       rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
-    halite_ships[stacked_ships.sum(0) == 0] = 1e-9
+    halite_ships[stacked_ships.sum(0) == 0] = -1e-9
     opponent_ship_distances = DISTANCES[(base_row, base_col)][opponent_ships]+(
       halite_on_board_mult*halite_ships[opponent_ships])
     sorted_opp_distance = np.sort(opponent_ship_distances)
@@ -1897,7 +2231,7 @@ def map_ship_plans_to_actions(
     [rbs[2] for rbs in observation['rewards_bases_ships']])
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
-  halite_ships[stacked_ships.sum(0) == 0] = 1e-9
+  halite_ships[stacked_ships.sum(0) == 0] = -1e-9
   updated_ship_pos = {}
   my_ship_density = smooth2d(np.logical_and(
     stacked_ships[0], halite_ships > 0), smooth_kernel_dim=3)

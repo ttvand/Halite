@@ -176,8 +176,8 @@ def update_terminal_halite_scores(num_agents, halite_scores, episode_step,
   
   return halite_scores
 
-def update_lost_ships_count(player_mapped_actions, prev_players,
-                            current_players, prev_observation):
+def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
+                         prev_observation):
   num_players = len(current_players)
   num_lost_ships = np.zeros(num_players)
   
@@ -205,7 +205,11 @@ def update_lost_ships_count(player_mapped_actions, prev_players,
             move_row, move_col = rule_utils.move_ship_row_col(
               row, col, ship_action, grid_size)
             if not prev_bases[move_row, move_col]:
-              num_lost_ships[i] += 1
+              # Don't count base attack/defense ship loss
+              if not move_row*grid_size + move_col in [
+                  s[0] for s in current_player[2].values()]:
+                # Don't count self collisions
+                num_lost_ships[i] += 1
       
   return num_lost_ships
 
@@ -286,7 +290,7 @@ def collect_experience_single_game(
         0].observation.players[i][0]
       halite_scores[episode_step+1, i] = halite_score
     
-    num_lost_ships[episode_step] = update_lost_ships_count(
+    num_lost_ships[episode_step] = get_lost_ships_count(
       player_mapped_actions, players, env.state[0].observation.players,
       current_observation)
     
@@ -303,7 +307,7 @@ def collect_experience_single_game(
   
   # import pdb; pdb.set_trace()
   print("Action override counts:", action_override_counts.sum(0))
-  print("Num lost ships:", num_lost_ships[:390].sum(0))
+  print("Num lost ships:", num_lost_ships.sum(0))
     
   # Obtain the terminal rewards for all agents
   episode_rewards = get_episode_rewards(halite_scores)

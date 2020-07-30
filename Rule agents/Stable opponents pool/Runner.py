@@ -365,15 +365,15 @@ def update_scores_enemy_ships(
         halite_diff = max(-spawn_cost/2, halite_diff)
         distance_multiplier = 1/halite_diff_dist[1]
         mask_collect_return = np.copy(HALF_PLANES_CATCH[(row, col)][direction])
-        collect_grid_scores -= mask_collect_return*halite_diff*(
+        collect_grid_scores -= mask_collect_return*(halite_diff+1e6)*(
           config['collect_catch_enemy_multiplier'])*distance_multiplier
-        return_to_base_scores -= mask_collect_return*halite_diff*(
+        return_to_base_scores -= mask_collect_return*(halite_diff+1e6)*(
           config['return_base_catch_enemy_multiplier'])*distance_multiplier
-        attack_base_scores -= mask_collect_return*halite_diff*(
+        attack_base_scores -= mask_collect_return*(halite_diff+1e6)*(
           config['attack_base_catch_enemy_multiplier'])*distance_multiplier
         mask_establish = np.copy(mask_collect_return)
         mask_establish[row, col] = False
-        establish_base_scores -= mask_establish*halite_diff*(
+        establish_base_scores -= mask_establish*(halite_diff+1e6)*(
           config['establish_base_catch_enemy_multiplier'])*distance_multiplier
         
         preferred_directions.append(direction)
@@ -1339,10 +1339,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     ship_scores = all_ship_scores[ship_k]
     ship_halite = player_obs[2][ship_k][1]
     has_budget_to_convert = (ship_halite + player_obs[0]) >= convert_cost
-    convert_surrounded_ship = ship_scores[5] and (
-      ship_halite >= (convert_cost/config[
-            'boxed_in_halite_convert_divisor'])) and has_budget_to_convert and(
-              my_ship_count > 1)
+    convert_surrounded_ship = False
     valid_directions = ship_scores[6]
     almost_boxed_in = not None in valid_directions and (len(
       valid_directions) == 1 or set(valid_directions) in [
