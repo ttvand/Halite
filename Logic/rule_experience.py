@@ -27,6 +27,7 @@ ExperienceGame = recordtype('ExperienceGame', [
   'act_random_seeds',
   # 'first_agent_step_details',
   'game_recording',
+  'num_lost_ships',
   ])
 
 
@@ -175,6 +176,39 @@ def update_terminal_halite_scores(num_agents, halite_scores, episode_step,
   
   return halite_scores
 
+def update_lost_ships_count(player_mapped_actions, prev_players,
+                            current_players, prev_observation):
+  num_players = len(current_players)
+  num_lost_ships = np.zeros(num_players)
+  
+  prev_bases = np.stack([rbs[1] for rbs in prev_observation[
+    'rewards_bases_ships']]).sum(0) > 0
+  
+  for i in range(num_players):
+    prev_player = prev_players[i]
+    current_player = current_players[i]
+    prev_actions = player_mapped_actions[i]
+    was_alive = len(prev_player[2]) > 0 or (
+      len(prev_player[1]) > 0 and prev_player[0] >= 500)
+    grid_size = prev_bases.shape[0]
+    
+    if was_alive:
+      # Loop over all ships and figure out if a ship was lost unintentionally
+      for ship_k in prev_player[2]:
+        if not ship_k in current_player[2]:
+          if (not ship_k in prev_actions) or (
+              ship_k in prev_actions and prev_actions[ship_k] != "CONVERT"): 
+            row, col = utils.row_col_from_square_grid_pos(
+              prev_player[2][ship_k][0], grid_size)
+            ship_action = None if not ship_k in prev_actions else prev_actions[
+              ship_k]
+            move_row, move_col = rule_utils.move_ship_row_col(
+              row, col, ship_action, grid_size)
+            if not prev_bases[move_row, move_col]:
+              num_lost_ships[i] += 1
+      
+  return num_lost_ships
+
 def collect_experience_single_game(
     game_agent_paths, game_agents, num_agents, verbose, game_id,
     env_random_seed, act_random_seeds, record_game, episode_steps_override):
@@ -208,25 +242,28 @@ def collect_experience_single_game(
   
   # Take actions until the game is terminated
   episode_step = 0
+  num_lost_ships = np.zeros((max_episode_steps-1, num_agents), dtype=np.int)
   first_agent_step_details = []
   first_agent_ship_counts = np.zeros(max_episode_steps-1)
-  ship_counts = np.full((max_episode_steps, num_agents), np.nan)
+  ship_counts = np.full((max_episode_steps-1, num_agents), np.nan)
   while not env.done:
     env_observation = env.state[0].observation
     player_mapped_actions = []
     for active_id in range(num_agents):
       agent_status = env.state[active_id].status
+      players = env.state[0].observation.players
       if agent_status == 'ACTIVE':
         current_observation = utils.structured_env_obs(
           env.configuration, env_observation, active_id)
-        player_obs = env.state[0].observation.players[active_id]
+        player_obs = players[active_id]
         env_observation.player = active_id
         step_start_time = time.time()
         mapped_actions, halite_spent, step_details = (
           rule_utils.get_config_or_callable_actions(
             game_agents[active_id], current_observation, player_obs,
             env_observation, env.configuration, act_random_seeds[active_id]))
-        ship_counts[current_observation['step'], active_id] = len(player_obs[2])
+        ship_counts[current_observation['step'], active_id] = len(
+          player_obs[2])
         if active_id == 0:
           first_agent_step_details.append(step_details)
           first_agent_ship_counts[current_observation['step']] = len(
@@ -249,6 +286,10 @@ def collect_experience_single_game(
         0].observation.players[i][0]
       halite_scores[episode_step+1, i] = halite_score
     
+    num_lost_ships[episode_step] = update_lost_ships_count(
+      player_mapped_actions, players, env.state[0].observation.players,
+      current_observation)
+    
     episode_step += 1
     
   # Write the terminal halite scores
@@ -261,7 +302,8 @@ def collect_experience_single_game(
     'action_overrides'] for i in range(len(first_agent_step_details))])
   
   # import pdb; pdb.set_trace()
-  print("action_override_counts:", action_override_counts.sum(0))
+  print("Action override counts:", action_override_counts.sum(0))
+  print("Num lost ships:", num_lost_ships[:390].sum(0))
     
   # Obtain the terminal rewards for all agents
   episode_rewards = get_episode_rewards(halite_scores)
@@ -296,6 +338,7 @@ def collect_experience_single_game(
         act_random_seeds,
         # first_agent_step_details,
         game_recording,
+        num_lost_ships,
         )
   
   episode_duration = time.time() - episode_start_time

@@ -153,7 +153,8 @@ def row_col_from_square_grid_pos(pos, size):
     
 def update_scores_enemy_ships(
     config, collect_grid_scores, return_to_base_scores, establish_base_scores,
-    opponent_ships, halite_ships, row, col, grid_size, spawn_cost, min_dist=2):
+    opponent_ships, halite_ships, row, col, grid_size, spawn_cost, np_rng,
+    min_dist=2):
   direction_halite_diff_distance={
     NORTH: None,
     SOUTH: None,
@@ -189,7 +190,7 @@ def update_scores_enemy_ships(
   preferred_directions = []
   valid_directions = copy.copy(MOVE_DIRECTIONS)
   bad_directions = []
-  ignore_catch = np.random.uniform() < config['ignore_catch_prob']
+  ignore_catch = np_rng.uniform() < config['ignore_catch_prob']
   for direction, halite_diff_dist in direction_halite_diff_distance.items():
     if halite_diff_dist is not None:
       halite_diff = halite_diff_dist[0]
@@ -354,7 +355,8 @@ def override_early_return_base_scores(
   return return_to_base_scores
 
 
-def get_ship_scores(config, observation, player_obs, env_config, verbose):
+def get_ship_scores(config, observation, player_obs, env_config, np_rng,
+                    verbose):
   convert_cost = env_config.convertCost
   spawn_cost = env_config.spawnCost
   my_bases = observation['rewards_bases_ships'][0][1]
@@ -440,7 +442,7 @@ def get_ship_scores(config, observation, player_obs, env_config, verbose):
      agent_surrounded) = update_scores_enemy_ships(
        config, collect_grid_scores, return_to_base_scores,
        establish_base_scores, opponent_ships, halite_ships, row, col,
-       grid_size, spawn_cost)
+       grid_size, spawn_cost, np_rng)
        
     # Update the scores as a function of blocking enemy bases
     (collect_grid_scores, return_to_base_scores, establish_base_scores,
@@ -608,7 +610,7 @@ def move_ship_row_col(row, col, direction, size):
     return (row, col)
 
 def map_ship_plans_to_actions(config, observation, player_obs, env_config,
-                              verbose, ship_scores, ship_plans):
+                              verbose, ship_scores, ship_plans, np_rng):
   ship_actions = {}
   remaining_budget = player_obs[0]
   convert_cost = env_config.convertCost
@@ -664,8 +666,8 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
             halite_ships[row, col] > 0):
         # Override the convert logic - it's better to lose some ships than to
         # convert too much
-        target_row = np.mod(row + np.random.choice([-1, 1]), grid_size)
-        target_col = np.mod(col + np.random.choice([-1, 1]), grid_size)
+        target_row = np.mod(row + np_rng.choice([-1, 1]), grid_size)
+        target_col = np.mod(col + np_rng.choice([-1, 1]), grid_size)
         ship_plans[ship_k] = (target_row, target_col, [])
       else:
         ship_actions[ship_k] = ship_plans[ship_k]
@@ -693,12 +695,12 @@ def map_ship_plans_to_actions(config, observation, player_obs, env_config,
             preferred_directions))
           if intersect_directions:
             valid_actions = intersect_directions
-        action = str(np.random.choice(valid_actions))
+        action = str(np_rng.choice(valid_actions))
       else:
         action = None
         if bad_positions[row, col]:
           # Pick a random, not bad action
-          shuffled_actions = np.random.permutation(MOVE_DIRECTIONS[1:])
+          shuffled_actions = np_rng.permutation(MOVE_DIRECTIONS[1:])
           for a in shuffled_actions:
             move_row, move_col = move_ship_row_col(
               row, col, a, grid_size)
@@ -802,11 +804,25 @@ def decide_existing_base_spawns(
       
   return mapped_actions, remaining_budget
 
+def get_numpy_random_generator(
+    config, observation, rng_action_seed, print_seed=False):
+  if rng_action_seed is None:
+    rng_action_seed = 0
+  
+  if observation['step'] == 0 and print_seed:
+    print("Random acting seed: {}".format(rng_action_seed))
+    
+  return np.random.RandomState(rng_action_seed)
+
 def get_config_actions(config, observation, player_obs, env_config,
-                       verbose=False):
+                       rng_action_seed, verbose=False):
+  # Set the random seed
+  np_rng = get_numpy_random_generator(
+    config, observation, rng_action_seed, print_seed=True)
+  
   # Compute the ship scores for all high level actions
   ship_scores = get_ship_scores(config, observation, player_obs, env_config,
-                                verbose)
+                                np_rng, verbose)
   
   # Compute the coordinated high level ship plan
   ship_plans, my_next_bases = get_ship_plans(
@@ -816,7 +832,7 @@ def get_config_actions(config, observation, player_obs, env_config,
   (mapped_actions, remaining_budget, my_next_ships, my_next_halite,
    updated_ship_pos) = map_ship_plans_to_actions(
      config, observation, player_obs, env_config, verbose, ship_scores,
-     ship_plans)
+     ship_plans, np_rng)
   
   # Decide for all bases whether to spawn or keep the base available
   base_actions, remaining_budget = decide_existing_base_spawns(
@@ -881,12 +897,13 @@ for k in CONFIG:
   if k in HALITE_MULTIPLIER_CONFIG_ENTRIES:
     CONFIG[k] /= CONFIG['halite_config_setting_divisor']
 
-def my_agent(observation, env_config):
+def my_agent(observation, env_config, **kwargs):
+  rng_action_seed = kwargs['rng_action_seed']
   active_id = observation.player
   current_observation = structured_env_obs(env_config, observation, active_id)
   player_obs = observation.players[active_id]
   
   mapped_actions, _ = get_config_actions(
-    CONFIG, current_observation, player_obs, env_config)
+    CONFIG, current_observation, player_obs, env_config, rng_action_seed)
      
   return mapped_actions
