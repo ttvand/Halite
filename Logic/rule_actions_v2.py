@@ -910,7 +910,7 @@ def edge_aware_square_subset_mask(data, row, col, window, box, grid_size):
 
 def update_scores_opponent_boxing_in(
     ship_scores, stacked_ships, observation, opponent_ships_sensible_actions,
-    halite_ships, steps_remaining, player_obs, box_in_window=3):
+    halite_ships, steps_remaining, player_obs, np_rng, box_in_window=3):
   # Loop over the opponent ships and derive if I can box them in
   # For now this is just greedy. We should probably consider decoupling finding
   # targets from actually boxing in.
@@ -982,7 +982,7 @@ def update_scores_opponent_boxing_in(
           # Let's box the opponent in!
           # We should move towards the opponent if we can do so without opening
           # up an escape direction
-          print(observation['step'])
+          print(observation['step'], row, col)
           
           # Order the planning by priority of direction and distance to the
           # opponent
@@ -1013,10 +1013,9 @@ def update_scores_opponent_boxing_in(
             # attack with that ship and replace its position.
             # Otherwise pick a random attacker and keep the others in place.
             # Initial approach: don't move with ships at distance 1.
-            # TODO: add some randomness so that it is hard to escape.
             ship_target_2_distance_ids = np.where(my_nearest_distances[
               :, box_in_window, box_in_window] == 2)[0].tolist()
-            move_ids_directions_next_attack = []
+            move_ids_directions_next_attack = {}
             
             # Add the positions of the one step attackers
             for one_step_diff_id in np.where(ship_target_1_distances)[0]:
@@ -1034,44 +1033,56 @@ def update_scores_opponent_boxing_in(
               
               has_selected_action = False
               for d in shortest_directions:
+                # Prefer empty 1-step to target spaces over replacing a one
+                # step threat
                 move_row, move_col = move_ship_row_col(
                   my_row, my_col, d, size=1000)
-                if pos_taken[move_row, move_col] and not pos_taken[
-                    box_in_window, box_in_window]:
-                  move_ids_directions_next_attack.append((
-                    two_step_diff_id, d))
-                  # Find the ids of the 1-step ship and make sure that ship
-                  # attacks
-                  replaced_id = np.where(my_nearest_distances[
-                    :, move_row, move_col] == 0)[0][0]
-                  one_step_attack_dir = get_dir_from_target(
-                    move_row, move_col, box_in_window, box_in_window,
-                    grid_size=1000)[0]
-                  move_ids_directions_next_attack.append((
-                    replaced_id, one_step_attack_dir))
-                  pos_taken[box_in_window, box_in_window] = True
+                if not pos_taken[move_row, move_col]:
+                  move_ids_directions_next_attack[two_step_diff_id] = d
                   has_selected_action = True
+                  break
               if not has_selected_action:
-                # Try to take an available square
+                # Replace a 1-step threatening ship
                 for d in shortest_directions:
                   move_row, move_col = move_ship_row_col(
                     my_row, my_col, d, size=1000)
-                  if not pos_taken[move_row, move_col]:
-                    move_ids_directions_next_attack.append((
-                      two_step_diff_id, d))
-                    break
+                  if pos_taken[move_row, move_col] and not pos_taken[
+                    box_in_window, box_in_window]:
+                    move_ids_directions_next_attack[two_step_diff_id] = d
+                    # Find the ids of the 1-step ship and make sure that ship
+                    # attacks
+                    replaced_id = np.where(my_nearest_distances[
+                      :, move_row, move_col] == 0)[0][0]
+                    one_step_attack_dir = get_dir_from_target(
+                      move_row, move_col, box_in_window, box_in_window,
+                      grid_size=1000)[0]
+                    move_ids_directions_next_attack[replaced_id] = (
+                      one_step_attack_dir)
+                    pos_taken[box_in_window, box_in_window] = True
               
               
+            one_step_diff_ids = np.where(ship_target_1_distances)[0]
             if pos_taken[box_in_window, box_in_window]:
               # Add the remaining one step attackers with stay in place actions
-              import pdb; pdb.set_trace()
-              x=1
+              # TODO: add some randomness so that it is harder to escape.
+              for one_step_diff_id in one_step_diff_ids:
+                if not one_step_diff_id in move_ids_directions_next_attack:
+                  move_ids_directions_next_attack[one_step_diff_id] = None
             else:
+              one_step_attacker_id = np_rng.choice(one_step_diff_ids)
               # Pick a random one step attacker to attack the target and make
-              # sure the remaining ships stay in place
-              import pdb; pdb.set_trace()
-              x=1
-          
+              # sure the remaining 1-step ships stay in place
+              for one_step_diff_id in one_step_diff_ids:
+                if one_step_diff_id == one_step_attacker_id:
+                  my_row = nearby_mask_pos[0][one_step_diff_id]
+                  my_col = nearby_mask_pos[1][one_step_diff_id]
+                  attack_dir = get_dir_from_target(
+                      my_row, my_col, box_in_window, box_in_window,
+                      grid_size=1000)[0]
+                else:
+                  attack_dir = None
+                move_ids_directions_next_attack[one_step_diff_id] = attack_dir
+              
           covered_directions = np.zeros(4, dtype=bool)
           ship_order = np.argsort(-ship_priorities)
           box_in_mask_rem_dirs_sum = np.copy(box_in_mask_dirs_sum)
@@ -1088,16 +1099,17 @@ def update_scores_opponent_boxing_in(
               my_col-box_in_window)
             box_in_mask_rem_dirs_sum[box_directions] -= 1
             
-            # if observation['step'] == 54 and my_row == 3 and my_col == 4:
+            # if observation['step'] == 198:
             #   import pdb; pdb.set_trace()
             
             if next_step_attack:
-              # If there is a ship that can take the position of my attacker:
-              # attack with that ship and replace it's position.
-              # Initial approach: don't move with ships at distance 1.
-              # TODO: add some randomness so that it is hard to escape.
-              import pdb; pdb.set_trace()
-              one_distance_ships = 1
+              # Increase the ship scores for the planned actions
+              if attack_id in move_ids_directions_next_attack:
+                move_dir = move_ids_directions_next_attack[attack_id]
+                move_row, move_col = move_ship_row_col(
+                  my_abs_row, my_abs_col, move_dir, grid_size)
+                # import pdb; pdb.set_trace()
+                ship_scores[ship_k][0][move_row, move_col] = 1e10
             else:
               num_covered_attacker = covered_directions[box_directions]
               attack_dir_id = np.argmin(num_covered_attacker + 0.1*(
@@ -1108,7 +1120,7 @@ def update_scores_opponent_boxing_in(
               one_hot_cover_dirs = np.zeros(4, dtype=bool)
               one_hot_cover_dirs[attack_move_id] = 1
               other_dirs_covered = one_hot_cover_dirs | covered_directions | (
-                box_in_mask_rem_dirs_sum >= 0)
+                box_in_mask_rem_dirs_sum >= 1)
               wait_reinforcements = not np.all(other_dirs_covered) or (
                 opponent_distance == 1)
               if wait_reinforcements:
@@ -1387,7 +1399,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   # Coordinate box in actions of opponent more halite ships
   ship_scores = update_scores_opponent_boxing_in(
     ship_scores, stacked_ships, observation, opponent_ships_sensible_actions,
-    halite_ships, steps_remaining, player_obs)
+    halite_ships, steps_remaining, player_obs, np_rng)
     
   return ship_scores, opponent_ships_sensible_actions, weighted_base_mask
 
@@ -1499,7 +1511,7 @@ def consider_restoring_base(
           all_ship_scores[ship_k][0][row, col] = 2000
         ensure_move_mask = 1000*DISTANCE_MASKS[(gather_row, gather_col)]
       else:
-        ensure_move_mask = np.random.uniform(0, 1e-9, (grid_size, grid_size))
+        ensure_move_mask = np_rng.uniform(0, 1e-9, (grid_size, grid_size))
         ensure_move_mask[row, col] = 0
       all_ship_scores[ship_k][2][:] += ensure_move_mask
       
