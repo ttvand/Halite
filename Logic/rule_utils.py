@@ -13,6 +13,7 @@ import seaborn as sns
 import utils
 import rule_actions_v1
 import rule_actions_v2
+import rule_actions_v3
 
 
 CONVERT = "CONVERT"
@@ -78,6 +79,8 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Self play rule_actions_v2 optimum 4 additional rules 9': 2,
     'rule actions v2 optimum 4 additional rules 10 aggressive': 2,
     'Rule actions v2 optimum 5': 2,
+    'Rule actions v2 optimum 5 additional rules 1': 2,
+    'Rule actions v3 optimum 1': 2,
     'Base attacker': 0.1,
     'Runner': 0.1,
     # 'Greedy - many spawns and conversions': 2,
@@ -395,20 +398,42 @@ def add_warped_kernel(grid, kernel, row, col):
   return grid + addition
 
 def get_config_actions(config, observation, player_obs, env_config,
-                       rng_action_seed, verbose=False, version_1=False):
-  call_module = rule_actions_v1 if version_1 else rule_actions_v2
-  return call_module.get_config_actions(
-    config, observation, player_obs, env_config, rng_action_seed, verbose)
+                       history, rng_action_seed, verbose=False, version="3"):
+  if version == "1":
+    call_module = rule_actions_v1 
+  elif version == "2":
+    call_module = rule_actions_v2
+  elif version == "3":
+    call_module = rule_actions_v3
+  
+  if version in ["1", "2"]:
+    no_history_return_vals = call_module.get_config_actions(
+      config, observation, player_obs, env_config, rng_action_seed, verbose)
+    return no_history_return_vals, {}
+  else:
+    return call_module.get_config_actions(
+      config, observation, player_obs, env_config, history, rng_action_seed,
+      verbose)
 
 def get_config_or_callable_actions(config_or_callable, observation, player_obs,
                                    env_observation, env_config,
-                                   rng_action_seed=0, verbose=False):
+                                   history, rng_action_seed=0, verbose=False):
   if isinstance(config_or_callable, dict):
     return get_config_actions(config_or_callable, observation, player_obs,
-                              env_config, rng_action_seed, verbose)
+                              env_config, history, rng_action_seed, verbose)
   else:
-    kwargs = {'rng_action_seed': rng_action_seed}
-    mapped_actions = config_or_callable(env_observation, env_config, **kwargs)
+    kwargs = {
+      'history': history,
+      'rng_action_seed': rng_action_seed,
+      }
+    return_vals = config_or_callable(
+      env_observation, env_config, **kwargs)
+    
+    if isinstance(return_vals, dict):
+      mapped_actions = return_vals
+      updated_history = {}
+    else:
+      mapped_actions, updated_history = return_vals
     
     # Infer the amount of halite_spent from the actions
     halite_spent = 0
@@ -418,7 +443,7 @@ def get_config_or_callable_actions(config_or_callable, observation, player_obs,
       elif mapped_actions[k] == CONVERT:
         halite_spent += env_config.convertCost
     
-    return mapped_actions, halite_spent, None
+    return mapped_actions, updated_history, halite_spent, None
 
 def get_next_config_settings(
     opt, config_keys, num_games, num_repeat_first_configs, config_ranges):

@@ -252,6 +252,7 @@ def collect_experience_single_game(
   first_agent_step_details = []
   first_agent_ship_counts = np.zeros(max_episode_steps-1)
   ship_counts = np.full((max_episode_steps-1, num_agents), np.nan)
+  histories = [{} for i in range(num_agents)]
   while not env.done:
     env_observation = env.state[0].observation
     player_mapped_actions = []
@@ -264,10 +265,12 @@ def collect_experience_single_game(
         player_obs = players[active_id]
         env_observation.player = active_id
         step_start_time = time.time()
-        mapped_actions, halite_spent, step_details = (
+        mapped_actions, updated_history, halite_spent, step_details = (
           rule_utils.get_config_or_callable_actions(
             game_agents[active_id], current_observation, player_obs,
-            env_observation, env.configuration, act_random_seeds[active_id]))
+            env_observation, env.configuration, histories[active_id],
+            act_random_seeds[active_id]))
+        histories[active_id] = updated_history
         ship_counts[current_observation['step'], active_id] = len(
           player_obs[2])
         if active_id == 0:
