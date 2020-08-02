@@ -16,6 +16,7 @@ ExperienceGame = recordtype('ExperienceGame', [
   'initial_agents_setup',
   'halite_scores',
   'action_delays',
+  'first_box_in_delays',
   'num_episode_steps',
   'episode_rewards',
   'terminal_num_bases',
@@ -234,6 +235,7 @@ def collect_experience_single_game(
   max_episode_steps = env.configuration.episodeSteps
   halite_scores = np.full((max_episode_steps, num_agents), np.nan)
   action_delays = np.full((max_episode_steps-1, num_agents), np.nan)
+  first_box_in_delays = np.full(max_episode_steps-1, np.nan)
   halite_scores[0] = env.state[0].observation.players[0][0]
   total_halite_spent = np.zeros(num_agents).tolist()
   
@@ -270,6 +272,7 @@ def collect_experience_single_game(
           player_obs[2])
         if active_id == 0:
           first_agent_step_details.append(step_details)
+          first_box_in_delays[episode_step] = step_details['box_in_duration']
           first_agent_ship_counts[current_observation['step']] = len(
             player_obs[2])
         step_delay = time.time() - step_start_time
@@ -331,6 +334,7 @@ def collect_experience_single_game(
         initial_agents_setup,
         halite_scores,
         action_delays,
+        first_box_in_delays,
         episode_step,
         episode_rewards,
         terminal_num_bases,

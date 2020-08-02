@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 43 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = {
@@ -105,7 +105,7 @@ config = {
     'establish_first_base_smoothed_multiplier_correction': 2.5,
     'establish_base_deposit_multiplier': 1.0,
     'establish_base_less_halite_ships_multiplier_base': 1.0,
-    'max_attackers_per_base': 3,
+    'max_attackers_per_base': 3*1,
     'attack_base_multiplier': 200.0,
     
     'attack_base_less_halite_ships_multiplier_base': 0.9,
