@@ -1,6 +1,5 @@
 from collections import OrderedDict
 import copy
-import getpass # TODO: use in v3 agents to switch between local and comp mode
 import numpy as np
 from scipy import signal
 import time
@@ -971,7 +970,7 @@ def update_scores_opponent_boxing_in(
     my_less_halite_mask = np.logical_and(
       halite_ships < target_halite, ships_available)
     
-    # if observation['step'] == 42 and row == 6 and col == 0:
+    # if observation['step'] == 129 and row == 10 and col == 7:
     #   import pdb; pdb.set_trace()
     
     # Drop non zero halite ships towards the end of a game (they should return)
@@ -981,6 +980,7 @@ def update_scores_opponent_boxing_in(
     max_dist_mask = ROW_COL_MAX_DISTANCE_MASKS[(row, col, double_window)]
     my_less_halite_mask &= max_dist_mask
     box_pos = ROW_COL_BOX_MAX_DISTANCE_MASKS[row, col, double_window]
+    
     if True:
       # Look up the near opponent min halite in the square which is in the middle
       # between my attackers and the target
@@ -1008,8 +1008,9 @@ def update_scores_opponent_boxing_in(
                      (considered_cols*(1-1e-9)+col*(1+1e-9)+grid_size)/2),
                      grid_size))
           ).astype(np.int)
-        drop_ids = near_opponent_min_halite[
-          (mid_rows, mid_cols)] < halite_ships[(mid_rows, mid_cols)]
+        # TODO: maybe revise the <= to make the boxing in less conservative
+        drop_ids = near_opponent_min_halite[(mid_rows, mid_cols)] <= (
+          halite_ships[(considered_rows, considered_cols)])
         if np.any(drop_ids):
           drop_row_ids = considered_rows[drop_ids]
           drop_col_ids = considered_cols[drop_ids]
@@ -1170,7 +1171,7 @@ def update_scores_opponent_boxing_in(
             one_step_diff_ids = np.where(ship_target_1_distances)[0]
             if pos_taken[double_window, double_window]:
               # Add the remaining one step attackers with stay in place actions
-              # TODO: add some randomness so that it is harder to escape.
+              # TODO: (maybe) add some randomness so that it is harder to escape.
               for one_step_diff_id in one_step_diff_ids:
                 if not one_step_diff_id in move_ids_directions_next_attack:
                   move_ids_directions_next_attack[one_step_diff_id] = None
@@ -1384,7 +1385,6 @@ def update_scores_opponent_boxing_in(
                 if wait_reinforcements:
                   # Move away from the target if staying would mean having more
                   # halite than the target
-                  # TODO: make sure this always makes sense
                   my_next_halite = halite_ships[my_abs_row, my_abs_col] + int(
                       collect_rate*obs_halite[my_abs_row, my_abs_col])
                   if my_next_halite > target_halite:
@@ -2254,6 +2254,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     (grid_size, grid_size), dtype=np.int)
   return_base_distances = []
   chain_conflict_resolution = []
+  ship_conflict_resolution = []
   
   # if observation['step'] == 235:
   #   print([ship_ids[o] for o in ship_order])
@@ -2268,7 +2269,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         player_obs[2][ship_k][0], grid_size)
       valid_directions = ship_scores[6]
       
-      # if observation['step'] == 398 and ship_k in ['74-1']:
+      # if observation['step'] == 65 and ship_k in ['6-1']:
       #   import pdb; pdb.set_trace()
       
       for sq, sq_max_d in [
@@ -2409,11 +2410,27 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
             if square_taken[0]:
               print(observation['step'], row, col)
             else:
-              chain_conflict_resolution.append((
-                considered_squares[0], considered_squares[1]))
-              chain_conflict_resolution.append((
-                considered_squares[1], considered_squares[0]))
+              first_pair = (considered_squares[0], considered_squares[1])
+              second_pair = (considered_squares[1], considered_squares[0])
+              chain_conflict_resolution.append(first_pair)
+              chain_conflict_resolution.append(second_pair)
               
+              # If two ships move in opposite diagonal directions, both squares
+              # are definitely occupied
+              if ((first_pair, second_pair) in ship_conflict_resolution) and (
+                    first_pair in chain_conflict_resolution) and (
+                      second_pair in chain_conflict_resolution):
+                deterministic_next_pos = considered_squares[0]
+                ship_conflict_resolution.remove((first_pair, second_pair))
+                ship_conflict_resolution.remove((second_pair, first_pair))
+              else:
+                ship_conflict_resolution.append((first_pair, second_pair))
+                ship_conflict_resolution.append((second_pair, first_pair))
+          
+      # if observation['step'] == 55 and (row, col) in [
+      #     (3, 4), (4, 5), (5, 4)]:
+      #   import pdb; pdb.set_trace()
+                  
       if deterministic_next_pos is not None:
         det_stack = [deterministic_next_pos]
         while det_stack:
@@ -2423,7 +2440,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
           del_pairs = []
           for sq1, sq2 in chain_conflict_resolution:
             if det_pos == sq1:
-              chained_pos.append(sq2)
+              if not sq2 in chained_pos:
+                chained_pos.append(sq2)
               del_pairs.append((sq1, sq2))
               del_pairs.append((sq2, sq1))
           if chained_pos:
@@ -2459,7 +2477,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
           future_ship_scores[3]]).max()
         
         # Lower the priority for future ships using the updated ship scores
-        # TODO: check that the priorities only go down
         priority_change = updated_best_score - best_ship_scores[ship_k_future]
         assert priority_change <= 0 
         ship_priority_scores[order_id] += priority_change
@@ -2468,12 +2485,11 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     
     # Update the ship order - this works since priorities can only be lowered
     # and we only consider future ships when downgrading priorities
-    # TODO: does this always work??? - Make sure no ships get skipped by a +1
-    # hack
+    # Make sure no ships get skipped by the +1 hack
     ship_priority_scores[ship_order[:(i+1)]] += 1
     ship_order = np.argsort(-ship_priority_scores)
     
-  # if observation['step'] == 269:
+  # if observation['step'] == 55:
   #   import pdb; pdb.set_trace()
       
   return ship_plans, my_bases, all_ship_scores, base_attackers, box_in_duration
@@ -2599,9 +2615,8 @@ def map_ship_plans_to_actions(
   my_ship_density = smooth2d(np.logical_and(
     stacked_ships[0], halite_ships > 0), smooth_kernel_dim=3)
   
-  # if observation['step'] >= 324:
-  #   import pdb; pdb.set_trace()
-  #   x=1
+  # For debugging - the order in which actions are planned
+  ordered_debug_ship_plans = [[k]+list(v) for k, v in ship_plans.items()]
   
   for target_base in base_attackers:
     attackers = base_attackers[target_base]
@@ -2714,12 +2729,7 @@ def map_ship_plans_to_actions(
     #     before_plan_ship_scores[ship_k][9]) - i + 1e7*ship_scores[ship_k][11]
   
   ship_order = np.argsort(-ship_priority_scores)
-  try:
-    ordered_ship_plans = [ship_key_plans[o] for o in ship_order]
-  except:
-    # !!! TODO: fix the rare bug of skipping ships during planning !!!
-    # This may have been fixed already but I am only 99.83% confident
-    import pdb; pdb.set_trace()
+  ordered_ship_plans = [ship_key_plans[o] for o in ship_order]
   
   # Keep track of all my ship positions and rearrange the action planning when
   # one of my ships only has one remaining option that does not self destruct.
@@ -3121,7 +3131,6 @@ def decide_existing_base_spawns(
             break
     
     # Spawn less when the base is crowded with ships with a lot of halite
-    # TODO: use the updated ship halite
     spawn_scores[i] -= smoothed_friendly_ship_halite[row, col]*(
       config['nearby_ship_halite_spawn_constant'])
         

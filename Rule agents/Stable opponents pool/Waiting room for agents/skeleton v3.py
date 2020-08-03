@@ -67,9 +67,6 @@ NORTH = "NORTH"
 
   mapped_actions.update(base_actions)
   
-  # if observation['step'] == 197:
-  #   import pdb; pdb.set_trace()
-  
   return mapped_actions, history
 
 def get_base_pos(base_data, grid_size):
@@ -125,10 +122,6 @@ def structured_env_obs(env_configuration, env_observation, active_id):
 HISTORY = {}
 def my_agent(observation, env_config, **kwargs):
   global HISTORY
-#  if LOCAL_MODE:
-#    assert 'history' in kwargs
-#    HISTORY = kwargs['history']
-    
   rng_action_seed = kwargs.get('rng_action_seed', 0)
   active_id = observation.player
   current_observation = structured_env_obs(env_config, observation, active_id)

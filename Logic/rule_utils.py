@@ -423,7 +423,6 @@ def get_config_or_callable_actions(config_or_callable, observation, player_obs,
                               env_config, history, rng_action_seed, verbose)
   else:
     kwargs = {
-      'history': history,
       'rng_action_seed': rng_action_seed,
       }
     return_vals = config_or_callable(
