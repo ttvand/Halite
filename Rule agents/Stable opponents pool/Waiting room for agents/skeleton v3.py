@@ -5,6 +5,9 @@ import numpy as np
 from scipy import signal
 import time
 
+
+LOCAL_MODE = getpass.getuser() == 'tom'
+
 CONFIG = {
     'halite_config_setting_divisor': 1.0,
     'collect_smoothed_multiplier': 0.02,
@@ -122,9 +125,9 @@ def structured_env_obs(env_configuration, env_observation, active_id):
 HISTORY = {}
 def my_agent(observation, env_config, **kwargs):
   global HISTORY
-  if LOCAL_MODE:
-    assert 'history' in kwargs
-    HISTORY = kwargs['history']
+#  if LOCAL_MODE:
+#    assert 'history' in kwargs
+#    HISTORY = kwargs['history']
     
   rng_action_seed = kwargs.get('rng_action_seed', 0)
   active_id = observation.player
@@ -136,6 +139,7 @@ def my_agent(observation, env_config, **kwargs):
     rng_action_seed)
      
   if LOCAL_MODE:
+    # This is to allow for debugging of the history outside of the agent
     return mapped_actions, copy.deepcopy(HISTORY)
   else:
     return mapped_actions

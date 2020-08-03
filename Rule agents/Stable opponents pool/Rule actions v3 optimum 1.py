@@ -3229,6 +3229,8 @@ def get_numpy_random_generator(
 
 def get_config_actions(config, observation, player_obs, env_config,
                        history, rng_action_seed, verbose=False):
+  print(history)
+                       
   # Set the random seed
   np_rng = get_numpy_random_generator(
     config, observation, rng_action_seed, print_seed=True)
@@ -3265,6 +3267,8 @@ def get_config_actions(config, observation, player_obs, env_config,
     updated_ship_pos, weighted_base_mask)
   
   mapped_actions.update(base_actions)
+  
+  history['prev_step'] = observation['step']
   
   # if observation['step'] == 197:
   #   import pdb; pdb.set_trace()
@@ -3324,9 +3328,9 @@ def structured_env_obs(env_configuration, env_observation, active_id):
 HISTORY = {}
 def my_agent(observation, env_config, **kwargs):
   global HISTORY
-  if LOCAL_MODE:
-    assert 'history' in kwargs
-    HISTORY = kwargs['history']
+#  if LOCAL_MODE:
+#    assert 'history' in kwargs
+#    HISTORY = kwargs['history']
     
   rng_action_seed = kwargs.get('rng_action_seed', 0)
   active_id = observation.player
@@ -3338,6 +3342,7 @@ def my_agent(observation, env_config, **kwargs):
     rng_action_seed)
      
   if LOCAL_MODE:
+    # This is to allow for debugging of the history outside of the agent
     return mapped_actions, copy.deepcopy(HISTORY)
   else:
     return mapped_actions
