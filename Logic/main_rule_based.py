@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 2 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 3 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = {
@@ -68,24 +68,28 @@ config = {
   
   #   'two_step_avoid_boxed_enemy_multiplier_base': ((0.7, 0.9), "float", 0),
   #   'n_step_avoid_boxed_enemy_multiplier_base': ((0.3, 0.9), "float", 0),
+  #   'min_consecutive_chase_extrapolate': ((4, 10), "int", 1),
+  #   'chase_return_base_exponential_bonus': ((1.0, 2.0), "float", 0),
   #   'ignore_catch_prob': ((0.3, 0.5), "float", 0),
+  
   #   'max_ships': ((20, 21), "int", 1),
   #   'max_spawns_per_step': ((1, 3), "int", 1),
-  
   #   'nearby_ship_halite_spawn_constant': ((1.0, 5.0), "float", 0),
   #   'nearby_halite_spawn_constant': ((2.0, 10.0), "float", 0),
   #   'remaining_budget_spawn_constant': ((0.2, 0.20001), "float", 0),
+  
   #   'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
   #   'boxed_in_halite_convert_divisor': ((0.5, 2.0), "float", 1),
-  
   #   'n_step_avoid_min_die_prob_cutoff': ((0.0, 0.2), "float", 0),
   #   'n_step_avoid_window_size': ((5, 9), "int", 3),
   #   'influence_map_base_weight': ((1.0, 3.0), "float", 0),
+  
   #   'influence_map_min_ship_weight': ((0.0, 0.5), "float", 0),
   #   'influence_weights_additional_multiplier': ((0.0, 10.0), "float", 0),
-  
   #   'influence_weights_exponent': ((3.0, 9.0), "float", 1),
+  #   'escape_influence_prob_divisor': ((1.0, 5.0), "float", 1),
   #   'max_spawn_relative_step_divisor': ((100.0, 100.001), "float", 1),
+  
   #   'no_spawn_near_base_ship_limit': ((2, 10), "int", 2),
   #   }
   
@@ -122,24 +126,28 @@ config = {
     
     'two_step_avoid_boxed_enemy_multiplier_base': 0.8,
     'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
+    'min_consecutive_chase_extrapolate': 5,
+    'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.5,
+    
     'max_ships': 20,
     'max_spawns_per_step': 1,
-    
     'nearby_ship_halite_spawn_constant': 3.0,
     'nearby_halite_spawn_constant': 5.0,
     'remaining_budget_spawn_constant': 0.2,
+    
     'spawn_score_threshold': 75.0,
     'boxed_in_halite_convert_divisor': 1.0,
-    
     'n_step_avoid_min_die_prob_cutoff': 0.1,
     'n_step_avoid_window_size': 7,
     'influence_map_base_weight': 1.5,
+    
     'influence_map_min_ship_weight': 0.0,
     'influence_weights_additional_multiplier': 4.0,
-    
     'influence_weights_exponent': 8.0,
+    'escape_influence_prob_divisor': 3.0,
     'max_spawn_relative_step_divisor': 100.0,
+    
     'no_spawn_near_base_ship_limit': 100,
     }
   }

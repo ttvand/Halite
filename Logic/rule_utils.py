@@ -81,6 +81,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Rule actions v2 optimum 5': 2,
     'Rule actions v2 optimum 5 additional rules 1': 2,
     'Rule actions v3 optimum 1': 2,
+    'Rule actions v3 optimum 1 additional rules 1': 3,
     'Base attacker': 0.1,
     'Runner': 0.1,
     # 'Greedy - many spawns and conversions': 2,
@@ -397,8 +398,9 @@ def add_warped_kernel(grid, kernel, row, col):
   
   return grid + addition
 
-def get_config_actions(config, observation, player_obs, env_config,
-                       history, rng_action_seed, verbose=False, version="3"):
+def get_config_actions(config, observation, player_obs, env_observation,
+                       env_config, history, rng_action_seed, verbose=False,
+                       version="3"):
   if version == "1":
     call_module = rule_actions_v1 
   elif version == "2":
@@ -412,15 +414,16 @@ def get_config_actions(config, observation, player_obs, env_config,
     return no_history_return_vals, {}
   else:
     return call_module.get_config_actions(
-      config, observation, player_obs, env_config, history, rng_action_seed,
-      verbose)
+      config, observation, player_obs, env_observation, env_config, history,
+      rng_action_seed, verbose)
 
-def get_config_or_callable_actions(config_or_callable, observation, player_obs,
-                                   env_observation, env_config,
-                                   history, rng_action_seed=0, verbose=False):
+def get_config_or_callable_actions(
+    config_or_callable, observation, player_obs, env_observation, env_config,
+    history, rng_action_seed=0, verbose=False):
   if isinstance(config_or_callable, dict):
-    return get_config_actions(config_or_callable, observation, player_obs,
-                              env_config, history, rng_action_seed, verbose)
+    return get_config_actions(
+      config_or_callable, observation, player_obs, env_observation,
+      env_config, history, rng_action_seed, verbose)
   else:
     kwargs = {
       'rng_action_seed': rng_action_seed,

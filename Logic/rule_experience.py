@@ -17,6 +17,7 @@ ExperienceGame = recordtype('ExperienceGame', [
   'halite_scores',
   'action_delays',
   'first_box_in_delays',
+  'first_history_delays',
   'num_episode_steps',
   'episode_rewards',
   'terminal_num_bases',
@@ -207,9 +208,12 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
               row, col, ship_action, grid_size)
             if not prev_bases[move_row, move_col]:
               # Don't count base attack/defense ship loss
-              if not move_row*grid_size + move_col in [
-                  s[0] for s in current_player[2].values()]:
+              if (not move_row*grid_size + move_col in [
+                  s[0] for s in current_player[2].values()]) and (
+                    prev_observation['relative_step'] < 0.975):
                 # Don't count self collisions
+                # if i == 0 or prev_observation['relative_step']:
+                #   import pdb; pdb.set_trace()
                 num_lost_ships[i] += 1
       
   return num_lost_ships
@@ -236,6 +240,7 @@ def collect_experience_single_game(
   halite_scores = np.full((max_episode_steps, num_agents), np.nan)
   action_delays = np.full((max_episode_steps-1, num_agents), np.nan)
   first_box_in_delays = np.full(max_episode_steps-1, np.nan)
+  first_history_delays = np.full(max_episode_steps-1, np.nan)
   halite_scores[0] = env.state[0].observation.players[0][0]
   total_halite_spent = np.zeros(num_agents).tolist()
   
@@ -276,6 +281,7 @@ def collect_experience_single_game(
         if active_id == 0:
           first_agent_step_details.append(step_details)
           first_box_in_delays[episode_step] = step_details['box_in_duration']
+          first_history_delays[episode_step] = step_details['box_in_duration']
           first_agent_ship_counts[current_observation['step']] = len(
             player_obs[2])
         step_delay = time.time() - step_start_time
@@ -321,6 +327,7 @@ def collect_experience_single_game(
   # Obtain the terminal number of ships and bases for all agents
   terminal_num_bases, terminal_num_ships = get_base_and_ship_counts(env)
   terminal_halite = halite_scores[-1].tolist()
+  print("Terminal halite:", terminal_halite)
   
   # Generate the episode recording if requested
   if record_game:
@@ -338,6 +345,7 @@ def collect_experience_single_game(
         halite_scores,
         action_delays,
         first_box_in_delays,
+        first_history_delays,
         episode_step,
         episode_rewards,
         terminal_num_bases,

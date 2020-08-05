@@ -3227,8 +3227,8 @@ def get_numpy_random_generator(
   step_seed = int(rng_action_seed+observation['step'])
   return np.random.RandomState(step_seed)
 
-def get_config_actions(config, observation, player_obs, env_config,
-                       history, rng_action_seed, verbose=False):   
+def get_config_actions(config, observation, player_obs, env_observation,
+                       env_config, history, rng_action_seed, verbose=False):
   # Set the random seed
   np_rng = get_numpy_random_generator(
     config, observation, rng_action_seed, print_seed=True)
@@ -3327,7 +3327,7 @@ def my_agent(observation, env_config, **kwargs):
   player_obs = observation.players[active_id]
   
   mapped_actions, HISTORY = get_config_actions(
-    CONFIG, current_observation, player_obs, env_config, HISTORY,
+    CONFIG, current_observation, player_obs, observation, env_config, HISTORY,
     rng_action_seed)
      
   if LOCAL_MODE:

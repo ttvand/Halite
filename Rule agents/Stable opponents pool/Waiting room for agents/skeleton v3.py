@@ -128,7 +128,7 @@ def my_agent(observation, env_config, **kwargs):
   player_obs = observation.players[active_id]
   
   mapped_actions, HISTORY = get_config_actions(
-    CONFIG, current_observation, player_obs, env_config, HISTORY,
+    CONFIG, current_observation, player_obs, observation, env_config, HISTORY,
     rng_action_seed)
      
   if LOCAL_MODE:
