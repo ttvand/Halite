@@ -834,14 +834,24 @@ def get_influence_map(config, stacked_bases, stacked_ships, halite_ships,
   grid_size = my_ships.shape[0]
   ship_range = 1-config['influence_map_min_ship_weight']
   all_ships_halite = halite_ships[all_ships]
-  unique_halite_vals = np.sort(np.unique(all_ships_halite)).astype(
-    np.int).tolist()
-  num_unique = len(unique_halite_vals)
+  unique_vals, unique_counts = np.unique(
+    all_ships_halite, return_counts=True)
+  assert np.all(np.diff(unique_vals) > 0)
+  unique_halite_vals = np.sort(unique_vals).astype(np.int).tolist()
+  num_ships = all_ships_halite.size
   
+  # TODO: double check!
   halite_ranks = [np.array(
     [unique_halite_vals.index(hs) for hs in halite_ships[
       stacked_ships[i]]]) for i in range(num_players)]
-  ship_weights = [1 - r/(num_unique-1+1e-9)*ship_range for r in halite_ranks]
+  less_rank_cum_counts = np.cumsum(unique_counts)
+  num_unique = unique_counts.size
+  halite_rank_counts = [np.array(
+    [less_rank_cum_counts[r-1] if r > 0 else 0 for r in (
+      halite_ranks[i])]) for i in range(num_players)]
+  ship_weights = [1 - r/(num_ships-1+1e-9)*ship_range for r in halite_rank_counts]
+  
+  
   
   raw_influence_maps = np.zeros((num_players, grid_size, grid_size))
   influence_maps = np.zeros((num_players, grid_size, grid_size))
