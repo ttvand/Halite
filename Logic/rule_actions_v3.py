@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import copy
+import itertools
 import numpy as np
 from scipy import signal
 import time
@@ -508,16 +509,19 @@ def update_scores_enemy_ships(
                     
           # Add a "bootstrapped" catch probability using the density of the
           # players towards the edge of the threat direction
-          for threat_dir in RELATIVE_DIRECTIONS[:-1]:
-            dens_threat_rows = np.mod(move_row + threat_dir[0]*(
-              np.arange(config['n_step_avoid_window_size']//2,
-                        config['n_step_avoid_window_size'])), grid_size)
-            dens_threat_cols = np.mod(move_col + threat_dir[1]*(
-              1+np.arange(config['n_step_avoid_window_size']//2,
+          # Only add it if the next halite is > 0 (otherwise assume I can
+          # always escape)
+          if my_next_halite > 0:
+            for threat_dir in RELATIVE_DIRECTIONS[:-1]:
+              dens_threat_rows = np.mod(move_row + threat_dir[0]*(
+                np.arange(config['n_step_avoid_window_size']//2,
                           config['n_step_avoid_window_size'])), grid_size)
-            mean_escape_prob = escape_influence_probs[
-              dens_threat_rows, dens_threat_cols].mean()
-            lt_catch_prob[threat_dir].append(1/(1-mean_escape_prob+1e-9))
+              dens_threat_cols = np.mod(move_col + threat_dir[1]*(
+                1+np.arange(config['n_step_avoid_window_size']//2,
+                            config['n_step_avoid_window_size'])), grid_size)
+              mean_escape_prob = escape_influence_probs[
+                dens_threat_rows, dens_threat_cols].mean()
+              lt_catch_prob[threat_dir].append(1/(1-mean_escape_prob+1e-9))
             
           # if observation['step'] == 359 and ship_k == '67-1':
           #   import pdb; pdb.set_trace()
@@ -796,7 +800,8 @@ def scale_attack_scores_bases_ships(
   opponent_bases = stacked_opponent_bases.sum(0).astype(np.bool)
   if opponent_bases.sum() > 0 and main_base_distances.max() > 0:
     # TODO: tune these weights - maybe add them to the config
-    additive_nearby_main_base = 10/(1.5**main_base_distances)/(
+    additive_nearby_main_base = min(
+      10, 3/(observation['relative_step']+1e-9))/(1.5**main_base_distances)/(
       weighted_base_mask[my_bases].sum())
     additive_nearby_main_base[~opponent_bases] = 0
   else:
@@ -988,7 +993,8 @@ def edge_aware_square_subset_mask(data, row, col, window, box, grid_size):
 def update_scores_opponent_boxing_in(
     ship_scores, stacked_ships, observation, opponent_ships_sensible_actions,
     halite_ships, steps_remaining, player_obs, np_rng, opponent_ships_scaled,
-    collect_rate, obs_halite, box_in_window=3, min_attackers_to_box=4):
+    collect_rate, obs_halite, main_base_distances, history, box_in_window=3,
+    min_attackers_to_box=4):
   # Loop over the opponent ships and derive if I can box them in
   # For now this is just greedy. We should probably consider decoupling finding
   # targets from actually boxing in.
@@ -1012,6 +1018,7 @@ def update_scores_opponent_boxing_in(
   attack_ship_priorities = np.zeros(num_opponent_ships)
   near_opponent_min_halite = np.ones((grid_size, grid_size))*1e6
   near_opponent_2_min_halite = np.ones((grid_size, grid_size))*1e6
+  should_attack = np.zeros(num_opponent_ships, dtype=np.bool)
   for i in range(num_opponent_ships):
     row = opponent_positions[0][i]
     col = opponent_positions[1][i]
@@ -1026,6 +1033,9 @@ def update_scores_opponent_boxing_in(
         opponent_halite, near_opponent_min_halite[near_opp_mask])
     near_opponent_2_min_halite[near_opp_2_mask] = np.minimum(
         opponent_halite, near_opponent_2_min_halite[near_opp_2_mask])
+    should_attack[i] = main_base_distances[row, col] >= 9-(
+      observation['relative_step']*6) or (opponent_halite < history[
+        'inferred_boxed_in_conv_threshold'][opponent_id][0])
   
   opponent_ship_order = np.argsort(-attack_ship_priorities)
   for i in range(num_opponent_ships):
@@ -1047,7 +1057,11 @@ def update_scores_opponent_boxing_in(
     my_less_halite_mask &= max_dist_mask
     box_pos = ROW_COL_BOX_MAX_DISTANCE_MASKS[row, col, double_window]
     
-    if my_less_halite_mask.sum() >= min_attackers_to_box:
+    # if observation['step'] == 183 and row == 3 and col == 6:
+    #   import pdb; pdb.set_trace()
+    
+    if my_less_halite_mask.sum() >= min_attackers_to_box and should_attack[
+        opponent_ship_id]:
       # Look up the near opponent min halite in the square which is in the middle
       # between my attackers and the target - don't attack when there is a less
       # halite ship near that ship or if there is an equal halite ship near that
@@ -1818,7 +1832,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
       n_step_bad_directions_die_probs)
     
   return (ship_scores, opponent_ships_sensible_actions, weighted_base_mask,
-          opponent_ships_scaled)
+          opponent_ships_scaled, main_base_distances)
 
 def get_mask_between_exclude_ends(r1, c1, r2, c2, grid_size):
   rel_pos = get_relative_position(r1, c1, r2, c2, grid_size)
@@ -2141,7 +2155,7 @@ def update_occupied_count(row, col, occupied_target_squares,
 def get_ship_plans(config, observation, player_obs, env_config, verbose,
                    all_ship_scores, np_rng, weighted_base_mask,
                    steps_remaining, opponent_ships_sensible_actions,
-                   opponent_ships_scaled,
+                   opponent_ships_scaled, main_base_distances, history,
                    convert_first_ship_on_None_action=True):
   my_bases = observation['rewards_bases_ships'][0][1]
   opponent_bases = np.stack(
@@ -2229,10 +2243,12 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     
   # Coordinate box in actions of opponent more halite ships
   box_start_time = time.time()
-  all_ship_scores = update_scores_opponent_boxing_in(
-    all_ship_scores, stacked_ships, observation,
-    opponent_ships_sensible_actions, halite_ships, steps_remaining, player_obs, np_rng,
-    opponent_ships_scaled, collect_rate, obs_halite)
+  if main_base_distances.max() > 0:
+    all_ship_scores = update_scores_opponent_boxing_in(
+      all_ship_scores, stacked_ships, observation,
+      opponent_ships_sensible_actions, halite_ships, steps_remaining,
+      player_obs, np_rng, opponent_ships_scaled, collect_rate, obs_halite,
+      main_base_distances, history)
   box_in_duration = time.time() - box_start_time
     
   # First, process the convert actions
@@ -2493,9 +2509,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
           if square_taken[0] != square_taken[1]:
             single_path_squares[not_taken_square] = 1
           else:
-            if square_taken[0]:
-              print(observation['step'], row, col)
-            else:
+            if not square_taken[0]:
               first_pair = (considered_squares[0], considered_squares[1])
               second_pair = (considered_squares[1], considered_squares[0])
               chain_conflict_resolution.append(first_pair)
@@ -2707,6 +2721,7 @@ def map_ship_plans_to_actions(
   
   # For debugging - the order in which actions are planned
   ordered_debug_ship_plans = [[k]+list(v) for k, v in ship_plans.items()]
+  ordered_debug_ship_plans = ordered_debug_ship_plans
   
   for target_base in base_attackers:
     attackers = base_attackers[target_base]
@@ -3409,8 +3424,133 @@ def update_chase_counter(history, observation, env_observation, stacked_ships,
         
   return history
 
+def list_of_combs(arr):
+    """returns a list of all subsets of a list"""
+    combs = []
+    for i in range(len(arr)):
+      listing = [list(x) for x in itertools.combinations(arr, i+1)]
+      combs.extend(listing)
+    return combs
+
+def infer_player_conversions(player_obs, prev_player_obs, halite_ships,
+                             env_config, observation, ordered_player_id):
+  # By considering the score change, the gather behavior and the number of
+  # spawns, the number of conversions can be aproximately inferred (not exact
+  # because of base attacks)
+  convert_cost = env_config.convertCost
+  score_change = prev_player_obs[0] - player_obs[0]
+  
+  # Consider new, disappeared and remaining ships
+  current_ships = set(player_obs[2].keys())
+  prev_ships = set(prev_player_obs[2].keys())
+  disappeared_ships = list(prev_ships - current_ships)
+  new_ships = list(current_ships-prev_ships)
+  new_ship_count = len(new_ships)
+  spent_spawns = new_ship_count*env_config.spawnCost
+  not_destroyed_ships = set(current_ships & prev_ships)
+  
+  # Consider new bases
+  current_bases = set(player_obs[1].keys())
+  current_base_pos = [player_obs[1][b] for b in current_bases]
+  prev_bases = set(prev_player_obs[1].keys())
+  new_bases = set(current_bases-prev_bases)
+  spent_new_bases = len(new_bases)*convert_cost
+  
+  deposited = 0
+  for k in not_destroyed_ships:
+    if player_obs[2][k][0] in current_base_pos:
+      deposited += prev_player_obs[2][k][1]
+    
+  prev_pos_to_k = {v[0]: k for k, v in prev_player_obs[2].items()}
+  converted_ships = [prev_pos_to_k[player_obs[1][b]] for b in new_bases]
+  for k in converted_ships:
+    deposited += prev_player_obs[2][k][1]
+    
+  unexplained_score_change = (
+    score_change-spent_spawns-spent_new_bases+deposited)
+  
+  if unexplained_score_change != 0:
+    unexplained_ship_scores = [convert_cost-prev_player_obs[2][k][1] for k in (
+      disappeared_ships)]
+    num_disappeared = len(disappeared_ships)
+    if num_disappeared < 7:
+      # This is to avoid spending too much time in a crazy conversion scenario
+      combination_found = False
+      for comb in list_of_combs(np.arange(num_disappeared)):
+        unexplained_sum = np.array(
+          [unexplained_ship_scores[c_id] for c_id in comb]).sum()
+        if unexplained_sum == unexplained_score_change:
+          converted_ships.extend([disappeared_ships[c_id] for c_id in comb])
+          combination_found = True
+          break
+      
+      # One scenario where no combination can be found is when one of the ships
+      # self-collides when returning to a base
+      # if not combination_found:
+      #   print("No convert resolution combination found", observation['step'],
+      #         ordered_player_id)
+      combination_found = combination_found
+  
+  return converted_ships
+  
+def update_box_in_counter(history, observation, env_observation, stacked_ships,
+                          other_halite_ships, player_ids, ordered_player_ids,
+                          env_config):
+  grid_size = stacked_ships.shape[1]
+  num_players = stacked_ships.shape[0]
+  
+  if observation['step'] in [0, env_config.episodeSteps-2]:
+    history['raw_box_data'] = [[] for _ in range(num_players)]
+    history['inferred_boxed_in_conv_threshold'] = [[
+      env_config.convertCost/2, env_config.convertCost] for _ in range(
+        num_players)]
+  else:
+    prev_opponent_sensible_actions = history['prev_step'][
+      'opponent_ships_sensible_actions']
+    for player_id in range(1, num_players):
+      # Consider all boxed in ships and infer the action that each player took
+      ordered_player_id = ordered_player_ids[player_id]
+      player_obs = env_observation.players[ordered_player_id]
+      prev_player_obs = history['prev_step']['env_observation'].players[
+          ordered_player_id]
+      converted_ships = infer_player_conversions(
+        player_obs, prev_player_obs, other_halite_ships, env_config,
+        observation, ordered_player_id)
+      
+      for k in prev_player_obs[2]:
+        row, col = row_col_from_square_grid_pos(
+          prev_player_obs[2][k][0], grid_size)
+        if len(prev_opponent_sensible_actions[row, col]) == 0:
+          prev_halite = prev_player_obs[2][k][1]
+          did_convert = k in converted_ships
+          history['raw_box_data'][player_id].append((prev_halite, did_convert))
+      
+      # Infer the halite convert threshold when being boxed in
+      if history['raw_box_data'][player_id]:
+        box_data = np.array(history['raw_box_data'][player_id])
+        current_thresholds = history['inferred_boxed_in_conv_threshold'][
+          player_id]
+        
+        if np.any(
+            (box_data[:, 1] == 0) & (box_data[:, 0] > current_thresholds[0])):
+          history['inferred_boxed_in_conv_threshold'][player_id][0] = (
+            box_data[box_data[:, 1] == 0, 0].max())
+        
+        for j in range(2):
+          if np.any(
+              (box_data[:, 1] == 1) & (box_data[:, 0] < current_thresholds[j])):
+            history['inferred_boxed_in_conv_threshold'][player_id][j] = (
+              box_data[box_data[:, 1] == 1, 0].min())
+        
+        if np.any(
+            (box_data[:, 1] == 1) & (box_data[:, 0] < current_thresholds[1])):
+          history['inferred_boxed_in_conv_threshold'][player_id][1] = (
+            box_data[box_data[:, 1] == 1, 0].min())
+  return history
+
 def update_history_start_step(
-    history, observation, player_obs, env_observation, ordered_player_ids):
+    history, observation, player_obs, env_observation, ordered_player_ids,
+    env_config):
   history_start_time = time.time()
   stacked_ships = np.stack([rbs[2] for rbs in observation[
     'rewards_bases_ships']])
@@ -3427,12 +3567,17 @@ def update_history_start_step(
   history = update_chase_counter(
     history, observation, env_observation, stacked_ships, other_halite_ships,
     player_ids, ordered_player_ids)
+  
+  # Update the data that keeps track of opponent behavior when being boxed in
+  history = update_box_in_counter(
+    history, observation, env_observation, stacked_ships, other_halite_ships,
+    player_ids, ordered_player_ids, env_config)
     
   return history, (time.time()-history_start_time)
 
 def update_history_end_step(
     history, observation, ship_actions, opponent_ships_sensible_actions,
-    ship_plans, player_obs):
+    ship_plans, player_obs, env_observation):
   none_included_ship_actions = {k: (ship_actions[k] if (
     k in ship_actions) else None) for k in player_obs[2]}
   
@@ -3440,6 +3585,7 @@ def update_history_end_step(
     'my_ship_actions': none_included_ship_actions,
     'opponent_ships_sensible_actions': opponent_ships_sensible_actions,
     'ship_plans': ship_plans,
+    'env_observation': env_observation,
     }
   return history
 
@@ -3471,11 +3617,12 @@ def get_config_actions(config, observation, player_obs, env_observation,
   
   # Update the history based on what happened during the past observation
   history, history_start_duration = update_history_start_step(
-    history, observation, player_obs, env_observation, ordered_player_ids)
+    history, observation, player_obs, env_observation, ordered_player_ids,
+    env_config)
   
   # Compute the ship scores for all high level actions
-  (ship_scores, opponent_ships_sensible_actions,
-   weighted_base_mask, opponent_ships_scaled) = get_ship_scores(
+  (ship_scores, opponent_ships_sensible_actions, weighted_base_mask,
+   opponent_ships_scaled, main_base_distances) = get_ship_scores(
     config, observation, player_obs, env_config, np_rng,
     ignore_bad_attack_directions, history, verbose)
   
@@ -3484,7 +3631,8 @@ def get_config_actions(config, observation, player_obs, env_observation,
    box_in_duration) = get_ship_plans(
     config, observation, player_obs, env_config, verbose,
     copy.deepcopy(ship_scores), np_rng, weighted_base_mask, steps_remaining,
-    opponent_ships_sensible_actions, opponent_ships_scaled)
+    opponent_ships_sensible_actions, opponent_ships_scaled,
+    main_base_distances, history)
   
   # Translate the ship high level plans to basic move/convert actions
   (mapped_actions, remaining_budget, my_next_ships, my_next_halite,
@@ -3505,7 +3653,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
   # the next step.
   history = update_history_end_step(
     history, observation, ship_actions, opponent_ships_sensible_actions,
-    ship_plans, player_obs)
+    ship_plans, player_obs, env_observation)
   
   mapped_actions.update(base_actions)
   halite_spent = player_obs[0]-remaining_budget
@@ -3522,7 +3670,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'history_start_duration': history_start_duration,
     }
   
-  # if observation['step'] == 57:
+  # if observation['step'] == 128:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details
