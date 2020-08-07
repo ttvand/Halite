@@ -313,7 +313,7 @@ def collect_experience_single_game(
     num_agents, halite_scores, episode_step, max_episode_steps, env)
     
   # Evaluate why the game evolved as it did
-  # import pdb; pdb.set_trace()
+  import pdb; pdb.set_trace()
   action_override_counts = np.array([first_agent_step_details[i][
     'action_overrides'] for i in range(len(first_agent_step_details))])
   

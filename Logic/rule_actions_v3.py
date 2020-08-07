@@ -631,7 +631,7 @@ def update_scores_enemy_ships(
             if min_die_prob > config['n_step_avoid_min_die_prob_cutoff']:
               n_step_step_bad_directions.append(d)
            
-  # if observation['step'] == 233 and ship_k == '3-1':
+  # if observation['step'] == 136 and ship_k == '51-1':
   #   import pdb; pdb.set_trace()
     
   # Treat the chasing - replace chaser position as an n-step bad action.
@@ -2620,32 +2620,38 @@ def update_scores_rescue_missions(
       dm = DISTANCE_MASKS[(row, col)]
       base_scores = dm*weighted_base_mask*my_bases
       target_base = np.where(base_scores == base_scores.max())
+      abort_rescue = False
       if not rescue_executed:
         # Jointly move to the nearest weighted base and assume that the
         # former zero halite position won't be attacked
         rescuer_row, rescuer_col = row_col_from_square_grid_pos(
           player_obs[2][rescuer_k][0], grid_size)
-        all_ship_scores[ship_k][0][rescuer_row, rescuer_col] = 1e8
-        to_rescuer_dir = get_dir_from_target(
-          row, col, rescuer_row, rescuer_col, grid_size)[0]
-        if to_rescuer_dir not in all_ship_scores[ship_k][6]:
-          all_ship_scores[ship_k][6].append(to_rescuer_dir)
-        increase_mask = get_mask_between_exclude_ends(
-          target_base[0], target_base[1], rescuer_row, rescuer_col,
-          grid_size)
-        for score_id in range(3):
-          all_ship_scores[rescuer_k][score_id][increase_mask] += 1e4
-      if min_escort_steps_remaining > 1:
-        new_escort_list.append((ship_k, rescuer_k, False,
-                                min_escort_steps_remaining-1,
-                                max_escort_steps_remaining-1))
-      elif max_escort_steps_remaining > 1:
-        # Consider if I should keep escorting the ship (there is no safe action)
-        ship_scores = all_ship_scores[ship_k]
-        valid_directions = ship_scores[6]
-        if len(set(valid_directions) - set(ship_scores[7]+ship_scores[8])) == 0:
-          new_escort_list.append(
-            (ship_k, rescuer_k, False, 1, max_escort_steps_remaining-1))
+        
+        abort_rescue = DISTANCES[row, col][rescuer_row, rescuer_col] > 1
+        if not abort_rescue:
+          all_ship_scores[ship_k][0][rescuer_row, rescuer_col] = 1e8
+          to_rescuer_dir = get_dir_from_target(
+            row, col, rescuer_row, rescuer_col, grid_size)[0]
+          if to_rescuer_dir not in all_ship_scores[ship_k][6]:
+            all_ship_scores[ship_k][6].append(to_rescuer_dir)
+          increase_mask = get_mask_between_exclude_ends(
+            target_base[0], target_base[1], rescuer_row, rescuer_col,
+            grid_size)
+          for score_id in range(3):
+            all_ship_scores[rescuer_k][score_id][increase_mask] += 1e4
+          
+      if not abort_rescue:
+        if min_escort_steps_remaining > 1:
+          new_escort_list.append((ship_k, rescuer_k, False,
+                                  min_escort_steps_remaining-1,
+                                  max_escort_steps_remaining-1))
+        elif max_escort_steps_remaining > 1:
+          # Consider if I should keep escorting the ship (there is no safe action)
+          ship_scores = all_ship_scores[ship_k]
+          valid_directions = ship_scores[6]
+          if len(set(valid_directions) - set(ship_scores[7]+ship_scores[8])) == 0:
+            new_escort_list.append(
+              (ship_k, rescuer_k, False, 1, max_escort_steps_remaining-1))
   history['escort_to_base_list'] = new_escort_list
   
   return all_ship_scores, on_rescue_mission, history
@@ -2818,7 +2824,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
       row, col = row_col_from_square_grid_pos(
         player_obs[2][ship_k][0], grid_size)
       
-      # if observation['step'] == 114 and ship_k == '64-1':
+      # if observation['step'] == 136 and ship_k == '51-1':
       #   import pdb; pdb.set_trace()
       
       # Incorporate new bases in the return to base scores
@@ -2877,7 +2883,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         player_obs[2][ship_k][0], grid_size)
       valid_directions = ship_scores[6]
       
-      # if observation['step'] == 114 and ship_k in ['64-1']:
+      # if observation['step'] == 136 and ship_k in ['51-1']:
       #   import pdb; pdb.set_trace()
       
       for sq, sq_max_d in [
@@ -4183,7 +4189,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'history_start_duration': history_start_duration,
     }
   
-  # if observation['step'] == 31:
+  # if observation['step'] == 136:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details
