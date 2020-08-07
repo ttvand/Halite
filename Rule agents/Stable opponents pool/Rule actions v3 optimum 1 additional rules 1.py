@@ -2515,9 +2515,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
           if square_taken[0] != square_taken[1]:
             single_path_squares[not_taken_square] = 1
           else:
-            if square_taken[0]:
-              print(observation['step'], row, col)
-            else:
+            if not square_taken[0]:
               first_pair = (considered_squares[0], considered_squares[1])
               second_pair = (considered_squares[1], considered_squares[0])
               chain_conflict_resolution.append(first_pair)

@@ -16,8 +16,11 @@ ExperienceGame = recordtype('ExperienceGame', [
   'initial_agents_setup',
   'halite_scores',
   'action_delays',
-  'first_box_in_delays',
-  'first_history_delays',
+  'first_box_in_durations',
+  'first_history_durations',
+  'first_ship_scores_durations',
+  'first_ship_plans_durations',
+  'first_ship_map_durations',
   'num_episode_steps',
   'episode_rewards',
   'terminal_num_bases',
@@ -239,8 +242,11 @@ def collect_experience_single_game(
   max_episode_steps = env.configuration.episodeSteps
   halite_scores = np.full((max_episode_steps, num_agents), np.nan)
   action_delays = np.full((max_episode_steps-1, num_agents), np.nan)
-  first_box_in_delays = np.full(max_episode_steps-1, np.nan)
-  first_history_delays = np.full(max_episode_steps-1, np.nan)
+  first_box_in_durations = np.full(max_episode_steps-1, np.nan)
+  first_history_durations = np.full(max_episode_steps-1, np.nan)
+  first_ship_scores_durations = np.full(max_episode_steps-1, np.nan)
+  first_ship_plans_durations = np.full(max_episode_steps-1, np.nan)
+  first_ship_map_durations = np.full(max_episode_steps-1, np.nan)
   halite_scores[0] = env.state[0].observation.players[0][0]
   total_halite_spent = np.zeros(num_agents).tolist()
   
@@ -280,8 +286,16 @@ def collect_experience_single_game(
           player_obs[2])
         if active_id == 0:
           first_agent_step_details.append(step_details)
-          first_box_in_delays[episode_step] = step_details['box_in_duration']
-          first_history_delays[episode_step] = step_details['box_in_duration']
+          first_box_in_durations[episode_step] = step_details[
+            'box_in_duration']
+          first_history_durations[episode_step] = step_details[
+            'history_start_duration']
+          first_ship_scores_durations[episode_step] = step_details[
+            'ship_scores_duration']
+          first_ship_plans_durations[episode_step] = step_details[
+            'ship_plans_duration']
+          first_ship_map_durations[episode_step] = step_details[
+            'ship_map_duration']
           first_agent_ship_counts[current_observation['step']] = len(
             player_obs[2])
         step_delay = time.time() - step_start_time
@@ -313,7 +327,7 @@ def collect_experience_single_game(
     num_agents, halite_scores, episode_step, max_episode_steps, env)
     
   # Evaluate why the game evolved as it did
-  import pdb; pdb.set_trace()
+  # import pdb; pdb.set_trace()
   action_override_counts = np.array([first_agent_step_details[i][
     'action_overrides'] for i in range(len(first_agent_step_details))])
   
@@ -343,8 +357,11 @@ def collect_experience_single_game(
         initial_agents_setup,
         halite_scores,
         action_delays,
-        first_box_in_delays,
-        first_history_delays,
+        first_box_in_durations,
+        first_history_durations,
+        first_ship_scores_durations,
+        first_ship_plans_durations,
+        first_ship_map_durations,
         episode_step,
         episode_rewards,
         terminal_num_bases,
@@ -493,6 +510,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
   # mean_action_frac = np.zeros_like(action_costs)
   # mean_action_frac[act_ids] = counts/counts.sum()
   
+  # import pdb; pdb.set_trace()
   print('Summed reward stats in {} games: {:.2f}'.format(
     num_games, reward_sum))
   if fixed_opponent_pool:
