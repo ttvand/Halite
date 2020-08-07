@@ -317,7 +317,6 @@ def collect_experience_single_game(
   action_override_counts = np.array([first_agent_step_details[i][
     'action_overrides'] for i in range(len(first_agent_step_details))])
   
-  # import pdb; pdb.set_trace()
   print("Action override counts:", action_override_counts.sum(0))
   print("Num lost ships:", num_lost_ships.sum(0))
     
