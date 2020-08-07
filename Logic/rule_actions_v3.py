@@ -238,7 +238,7 @@ def update_scores_enemy_ships(
     opponent_ships_sensible_actions, ignore_bad_attack_directions,
     observation, ship_k, my_bases, my_ships, steps_remaining, history,
     escape_influence_probs, player_ids, ordered_player_ids, env_observation,
-    min_dist=2):
+    main_base_distances, min_dist=2):
   direction_halite_diff_distance_raw = {
     NORTH: [], SOUTH: [], EAST: [], WEST: []}
   my_bases_or_ships = np.logical_or(my_bases, my_ships)
@@ -535,6 +535,8 @@ def update_scores_enemy_ships(
           for i in range(num_threat_ships_lt):
             other_row = less_halite_threat_opponents_lt[0][i]
             other_col = less_halite_threat_opponents_lt[1][i]
+            other_sensible_actions = opponent_ships_sensible_actions[
+              other_row, other_col]
             relative_other_pos = get_relative_position(
               move_row, move_col, other_row, other_col, grid_size)
             
@@ -555,9 +557,26 @@ def update_scores_enemy_ships(
               other_dir_abs_offset = np.abs(relative_other_pos[1-nz_dim])
               
               if dir_offset > 0 and (other_dir_abs_offset-1) <= dir_offset:
-                lt_catch_prob[threat_dir].append((
-                  other_dir_abs_offset+dir_offset)*(
-                    my_material_defense_multiplier))
+                # Ignore the threat if the ship is on the diagonal and can not
+                # move in the direction of the threat dir
+                if (other_dir_abs_offset-1) == dir_offset and len(
+                    other_sensible_actions) < 5:
+                  if nz_dim == 0:
+                    threat_other_dir = (
+                      0, 1 if relative_other_pos[1-nz_dim] < 0 else -1)
+                  else:
+                    threat_other_dir = (
+                      1 if relative_other_pos[1-nz_dim] < 0 else -1, 0)
+                  # import pdb; pdb.set_trace()
+                  consider_this_threat = threat_other_dir in (
+                    other_sensible_actions)
+                else:
+                  consider_this_threat = True
+                
+                if consider_this_threat:
+                  lt_catch_prob[threat_dir].append((
+                    other_dir_abs_offset+dir_offset)*(
+                      my_material_defense_multiplier))
                     
           # Add a "bootstrapped" catch probability using the density of the
           # players towards the edge of the threat direction
@@ -582,6 +601,12 @@ def update_scores_enemy_ships(
               (np.maximum(1, np.array(lt_catch_prob[k])-1)/np.array(
                 lt_catch_prob[k])).prod() for k in lt_catch_prob])
             min_die_prob = 1-survive_probs.max()
+            if main_base_distances.max() > 0:
+              if main_base_distances[move_row, move_col] <= 2:
+                min_die_prob = 0
+              else:
+                min_die_prob = max(
+                  0, min_die_prob-0.33**main_base_distances[move_row, move_col])
             
             # if observation['step'] > 20:
             #   import pdb; pdb.set_trace()
@@ -603,22 +628,19 @@ def update_scores_enemy_ships(
                 
             n_step_bad_directions_die_probs[d] = min_die_prob
             
-            if observation['step'] == 233 and ship_k == '3-1':
-              import pdb; pdb.set_trace()
-            
             if min_die_prob > config['n_step_avoid_min_die_prob_cutoff']:
               n_step_step_bad_directions.append(d)
            
-  if observation['step'] == 233 and ship_k == '3-1':
-    import pdb; pdb.set_trace()
+  # if observation['step'] == 233 and ship_k == '3-1':
+  #   import pdb; pdb.set_trace()
     
-  # # Treat the chasing - replace chaser position as an n-step bad action.
-  # # Otherwise, we can get trapped in a loop of dumb behavior.
-  # if take_my_next_square_dir is not None and not take_my_next_square_dir in (
-  #     two_step_bad_directions) and not take_my_next_square_dir in (
-  #       n_step_step_bad_directions):
-  #   n_step_step_bad_directions.append(take_my_next_square_dir)
-  #   n_step_bad_directions_die_probs[take_my_next_square_dir] = 0.25
+  # Treat the chasing - replace chaser position as an n-step bad action.
+  # Otherwise, we can get trapped in a loop of dumb behavior.
+  if take_my_next_square_dir is not None and not take_my_next_square_dir in (
+      two_step_bad_directions) and not take_my_next_square_dir in (
+        n_step_step_bad_directions):
+    n_step_step_bad_directions.append(take_my_next_square_dir)
+    n_step_bad_directions_die_probs[take_my_next_square_dir] = 0.25
           
   if valid_non_base_directions:
     valid_not_preferred_dirs = list(set(
@@ -1123,7 +1145,7 @@ def update_scores_opponent_boxing_in(
     my_less_halite_mask = np.logical_and(
       halite_ships < target_halite, ships_available)
     
-    # if observation['step'] == 129 and row == 10 and col == 7:
+    # if observation['step'] == 93 and row == 6 and col == 2:
     #   import pdb; pdb.set_trace()
     
     # Drop non zero halite ships towards the end of a game (they should return)
@@ -1884,7 +1906,8 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
        drop_None_valid, obs_halite, collect_rate, np_rng,
        opponent_ships_sensible_actions, ignore_bad_attack_directions,
        observation, ship_k, my_bases, my_ships, steps_remaining, history,
-       escape_influence_probs, player_ids, ordered_player_ids, env_observation)
+       escape_influence_probs, player_ids, ordered_player_ids, env_observation,
+       main_base_distances)
        
     # Update the scores as a function of blocking enemy bases and my early
     # game initial base
@@ -2253,9 +2276,10 @@ def update_scores_rescue_missions(
   
   # TODO: consider rescuing before being chased - this is only sensible if
   # rescue missions remain rare
-  
   chased_ships = list(history['chase_counter'][0].keys())
   for ship_k in chased_ships:
+    # if observation['step'] == 38 and ship_k == '22-1':
+    #   import pdb; pdb.set_trace()
     ship_scores = all_ship_scores[ship_k]
     valid_directions = ship_scores[6]
     if len(set(valid_directions) - set(ship_scores[7]+ship_scores[8])) == 0 and (
@@ -2300,15 +2324,19 @@ def update_scores_rescue_missions(
           rescuer_row = zero_halite_pos[0][nearest_halite_id]
           rescuer_col = zero_halite_pos[1][nearest_halite_id]
           all_ship_scores[ship_k][0][rescuer_row, rescuer_col] = 1e8
+          to_rescuer_dir = get_dir_from_target(
+            row, col, rescuer_row, rescuer_col, grid_size)[0]
+          if to_rescuer_dir not in all_ship_scores[ship_k][6]:
+            all_ship_scores[ship_k][6].append(to_rescuer_dir)
           rescuer_k = pos_to_k[rescuer_row*grid_size+rescuer_col]
           increase_mask = get_mask_between_exclude_ends(
             target_base[0], target_base[1], rescuer_row, rescuer_col,
             grid_size)
           for score_id in range(3):
             all_ship_scores[rescuer_k][score_id][increase_mask] += 1e4
-
+          
           history['escort_to_base_list'].append(
-            (ship_k, rescuer_k, True, 2, 15))
+            (ship_k, rescuer_k, True, 3, 15))
           
           # Add the ship pair to the escort-list for a fixed number of steps
           is_protected = True
@@ -2443,7 +2471,8 @@ def update_scores_rescue_missions(
                       
                 # Break valid move ties using moving towards my weighted bases
                 # and a region where I have more 0 halite ships and preferably
-                # a lower die probability
+                # a lower die probability while moving along the diagonal
+                # (empowerment)
                 if len(valid_move_dirs) > 1:
                   my_valid_zero_halite_ship_density = smooth2d(
                     valid_zero_halite_ships, smooth_kernel_dim=8)
@@ -2454,8 +2483,19 @@ def update_scores_rescue_missions(
                     dm = DISTANCE_MASKS[(row, col)]
                     dir_penalty = ship_scores[14][d] if (
                       d in ship_scores[14]) else 1
+                    horiz_diff = move_col-rescuer_col
+                    horiz_distance = min(np.abs(horiz_diff),
+                      min(np.abs(horiz_diff-grid_size),
+                          np.abs(horiz_diff+grid_size)))
+                    vert_diff = move_row-rescuer_row
+                    vert_distance = min(np.abs(vert_diff),
+                      min(np.abs(vert_diff-grid_size),
+                          np.abs(vert_diff+grid_size)))
+                    empowerment_bonus = min(
+                      vert_distance, horiz_distance)/2
+                    # import pdb; pdb.set_trace()
                     move_scores[i] = 0.5*my_valid_zero_halite_ship_density[
-                      move_row, move_col] + (
+                      move_row, move_col] + empowerment_bonus + (
                         dm*weighted_base_mask*my_bases).sum() - dir_penalty
                   
                   move_dir = valid_move_dirs[np.argmax(move_scores)]
@@ -2492,17 +2532,33 @@ def update_scores_rescue_missions(
                         valid_rescue_dirs = rescue_dirs
                       # Both ships should move to each other
                       # Break rescuer ties using the lower 0 halite opponent
-                      # density
+                      # density and moving along the diagonal (empowerment)
+                      # Strongly prefer zero halite squares when the current
+                      # distance is 4
                       # TODO: maybe reconsider potentially reckless rescuing
                       # behavior?
                       rescuer_move_scores = np.zeros(len(valid_rescue_dirs))
                       for i, d in enumerate(valid_rescue_dirs):
                         rescuer_move_row, rescuer_move_col = move_ship_row_col(
                           rescuer_row, rescuer_col, d, grid_size)
+                        move_zero_halite_bonus = int((rescuer_distance == 4)*(
+                          obs_halite[rescuer_move_row, rescuer_move_col] == 0))
+                        horiz_diff = rescuer_move_col-move_col
+                        horiz_distance = min(np.abs(horiz_diff),
+                          min(np.abs(horiz_diff-grid_size),
+                              np.abs(horiz_diff+grid_size)))
+                        vert_diff = rescuer_move_row-move_row
+                        vert_distance = min(np.abs(vert_diff),
+                          min(np.abs(vert_diff-grid_size),
+                              np.abs(vert_diff+grid_size)))
+                        empowerment_bonus = min(
+                          vert_distance, horiz_distance)/2
+                        # import pdb; pdb.set_trace()
                         rescuer_move_scores[i] = (
-                          opponent_zero_halite_ship_density[
-                            rescuer_move_row, rescuer_move_col])
-                      rescuer_dir = valid_rescue_dirs[np.argmin(
+                          -opponent_zero_halite_ship_density[
+                            rescuer_move_row, rescuer_move_col]) + (
+                              move_zero_halite_bonus) + empowerment_bonus
+                      rescuer_dir = valid_rescue_dirs[np.argmax(
                         rescuer_move_scores)]
                       rescuer_move_row, rescuer_move_col = move_ship_row_col(
                           rescuer_row, rescuer_col, rescuer_dir, grid_size)
@@ -2570,6 +2626,10 @@ def update_scores_rescue_missions(
         rescuer_row, rescuer_col = row_col_from_square_grid_pos(
           player_obs[2][rescuer_k][0], grid_size)
         all_ship_scores[ship_k][0][rescuer_row, rescuer_col] = 1e8
+        to_rescuer_dir = get_dir_from_target(
+          row, col, rescuer_row, rescuer_col, grid_size)[0]
+        if to_rescuer_dir not in all_ship_scores[ship_k][6]:
+          all_ship_scores[ship_k][6].append(to_rescuer_dir)
         increase_mask = get_mask_between_exclude_ends(
           target_base[0], target_base[1], rescuer_row, rescuer_col,
           grid_size)
@@ -4123,7 +4183,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'history_start_duration': history_start_duration,
     }
   
-  # if observation['step'] == 233:
+  # if observation['step'] == 31:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details

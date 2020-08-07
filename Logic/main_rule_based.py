@@ -12,7 +12,7 @@ import utils
 deterministic_games = True
 MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 1
+NUM_GAMES = 7
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -23,7 +23,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': False,
+  'use_multiprocessing': True,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
