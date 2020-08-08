@@ -10,9 +10,9 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 1 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 100 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 20
+NUM_GAMES = 7
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,

@@ -3730,24 +3730,25 @@ def map_ship_plans_to_actions(
                     move_row, move_col]
                   
                   # import pdb; pdb.set_trace()
-                  if opponent_id_bonus > 0 or base_distance_my_main_base <= 5:
-                    opponent_can_move_to_base = False
-                    for base_dir in MOVE_DIRECTIONS:
-                      base_defend_row, base_defend_col = move_ship_row_col(
-                        move_row, move_col, base_dir, grid_size)
-                      if stacked_ships[
-                          opponent_base_id, base_defend_row, base_defend_col]:
-                        defend_dir = RELATIVE_DIR_MAPPING[
-                          OPPOSITE_MAPPING[base_dir]]
-                        if defend_dir in opponent_ships_sensible_actions[
-                            base_defend_row, base_defend_col]:
-                          print("OPPONENT CAN MOVE TO BASE!")
-                          opponent_can_move_to_base = True
-                          break
+                  opponent_can_move_to_base = False
+                  for base_dir in MOVE_DIRECTIONS:
+                    base_defend_row, base_defend_col = move_ship_row_col(
+                      move_row, move_col, base_dir, grid_size)
+                    if stacked_ships[
+                        opponent_base_id, base_defend_row, base_defend_col]:
+                      defend_dir = RELATIVE_DIR_MAPPING[
+                        OPPOSITE_MAPPING[base_dir]]
+                      if defend_dir in opponent_ships_sensible_actions[
+                          base_defend_row, base_defend_col]:
+                        print("OPPONENT CAN MOVE TO BASE!")
+                        opponent_can_move_to_base = True
+                        break
                       
-                    if not opponent_can_move_to_base:
-                      attack_base_bonus = 1e6 + 5*opponent_id_bonus + (5-(
-                        base_distance_my_main_base))
+                  if not opponent_can_move_to_base:
+                    attack_base_bonus = 1e6*int(
+                      base_distance_my_main_base <= 5 or (
+                        opponent_id_bonus > 0)) + (20*opponent_id_bonus-5) + (
+                          max(0, 6-base_distance_my_main_base))
               else:
                 attack_base_bonus = 0
                 min_halite_player = int(
@@ -4293,7 +4294,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'ship_map_duration': ship_map_duration,
     }
   
-  # if observation['step'] >= 185:
+  # if observation['step'] >= 350:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details
