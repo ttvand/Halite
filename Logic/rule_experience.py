@@ -116,14 +116,19 @@ def get_game_agents(this_agent, opponent_agents, opponent_names, num_agents,
   return game_agent_paths, game_agents, other_agent_ids, other_agent_id_names
 
 # Update aggregate and step specific reward statistics
-def update_reward(episode_rewards, opponent_rewards, opponent_ids, num_agents):
+def update_reward(episode_rewards, opponent_rewards, opponent_ids, num_agents,
+                  rule_actions_id):
   if opponent_ids is not None:
+    env_obs_ids = [i for i in range(num_agents)]
+    env_obs_ids.remove(rule_actions_id)
+    
     for i, opponent_id in enumerate(opponent_ids):
-      if episode_rewards[i+1] == episode_rewards[0]:
+      other_id = env_obs_ids[i]
+      if episode_rewards[other_id] == episode_rewards[rule_actions_id]:
         reward_against_opponent = 0.5
       else: 
         reward_against_opponent = int(
-          episode_rewards[0] > episode_rewards[i+1])
+          episode_rewards[rule_actions_id] > episode_rewards[other_id])
       opponent_rewards[opponent_id] = (
         opponent_rewards[opponent_id][0] + 1,
         opponent_rewards[opponent_id][1] + reward_against_opponent,
@@ -229,7 +234,8 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
 
 def collect_experience_single_game(
     game_agent_paths, game_agents, num_agents, verbose, game_id,
-    env_random_seed, act_random_seeds, record_game, episode_steps_override):
+    env_random_seed, act_random_seeds, record_game, episode_steps_override,
+    rule_actions_id):
   episode_start_time = time.time()
   
   # Generate reproducible data for better debugging
@@ -242,7 +248,6 @@ def collect_experience_single_game(
   
   # Add option to shuffle the location of the main agent - for now this serves
   # for testing the stateful history logic.
-  rule_actions_id = 2
   first_rule_agent = game_agents.pop(0)
   game_agents.insert(rule_actions_id, first_rule_agent)
   
@@ -404,6 +409,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
                use_multiprocessing=False, num_repeat_first_configs=1,
                first_config_overrides=None, episode_steps_override=None):
   num_skipped = 0 # ONLY USE THIS FOR DEBUGGING
+  rule_actions_id = 2 # USED TO PLAY THE MAIN AGENTS AS DIFFERENT IDS
   (this_agent, other_agents, agents_full_paths,
    opponent_names) = load_pool_agents(
     pool_name, max_pool_size, exclude_current_from_opponents,
@@ -471,7 +477,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
       results = [pool.apply_async(
                   collect_experience_single_game, args=(
                     gap, ga, num_agents, verbose, g, ers,
-                    ars, rg, episode_steps_override)) for (
+                    ars, rg, episode_steps_override, rule_actions_id)) for (
                       gap, ga, g, ers, ars, rg) in zip(
                         n_game_agent_paths[num_skipped:],
                         n_game_agents[num_skipped:],
@@ -488,7 +494,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
           n_game_agent_paths[game_id], n_game_agents[game_id], num_agents,
           verbose, game_id, n_env_random_seeds[game_id],
           n_act_random_seeds[game_id], n_record_games[game_id],
-          episode_steps_override)
+          episode_steps_override, rule_actions_id)
       game_outputs.append(single_game_outputs)
     
   (n_this_game_data, n_episode_duration) = list(
@@ -500,10 +506,10 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     opponent_ids = n_opponent_ids[game_id]
     this_game_data.opponent_names = n_opponent_id_names[game_id]
     
-    this_episode_reward = episode_rewards[0]
+    this_episode_reward = episode_rewards[rule_actions_id]
     reward_sum += this_episode_reward
     update_reward(episode_rewards, opponent_id_rewards, opponent_ids,
-                  num_agents)
+                  num_agents, rule_actions_id)
     
     experience.append(this_game_data)
     # print("Episode duration: {:.2f}s".format(n_episode_duration[game_id])) 
