@@ -210,7 +210,8 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
             move_row, move_col = rule_utils.move_ship_row_col(
               row, col, ship_action, grid_size)
             if not prev_bases[move_row, move_col]:
-              # Don't count base attack/defense ship loss
+              # Don't count base attack/defense ship loss or self collision
+              # towards the end of the game
               if (not move_row*grid_size + move_col in [
                   s[0] for s in current_player[2].values()]) and (
                     prev_observation['relative_step'] < 0.975):
@@ -218,6 +219,11 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
                 # if i == 0 or prev_observation['relative_step']:
                 #   import pdb; pdb.set_trace()
                 num_lost_ships[i] += 1
+          elif prev_actions[ship_k] == "CONVERT" and (
+              prev_observation['step'] > 10):
+            # The ship most likely got boxed in and was forced to convert. 
+            # Note that this also counts lost ships due to losing the base.
+            num_lost_ships[i] += 1
       
   return num_lost_ships
 
@@ -233,6 +239,12 @@ def collect_experience_single_game(
     environment_utils.get_last_callable(a)) for a in game_agents]
   config_game_agents = [a if isinstance(a, dict) else "text_agent" for a in (
     game_agents)]
+  
+  # Add option to shuffle the location of the main agent - for now this serves
+  # for testing the stateful history logic.
+  rule_actions_id = 2
+  first_rule_agent = game_agents.pop(0)
+  game_agents.insert(rule_actions_id, first_rule_agent)
   
   env_config = {"randomSeed": env_random_seed}
   if episode_steps_override is not None:
@@ -284,7 +296,7 @@ def collect_experience_single_game(
         histories[active_id] = updated_history
         ship_counts[current_observation['step'], active_id] = len(
           player_obs[2])
-        if active_id == 0:
+        if active_id == rule_actions_id:
           first_agent_step_details.append(step_details)
           first_box_in_durations[episode_step] = step_details[
             'box_in_duration']

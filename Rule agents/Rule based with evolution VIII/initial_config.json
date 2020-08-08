@@ -28,6 +28,7 @@
         "early_game_return_boost_step": 50,
         "establish_base_smoothed_multiplier": 0.0,
         "establish_first_base_smoothed_multiplier_correction": 2.5,
+        "first_base_no_4_way_camping_spot_bonus": 500,
         "establish_base_deposit_multiplier": 1.0,
         "establish_base_less_halite_ships_multiplier_base": 1.0,
         "max_attackers_per_base": 3,
