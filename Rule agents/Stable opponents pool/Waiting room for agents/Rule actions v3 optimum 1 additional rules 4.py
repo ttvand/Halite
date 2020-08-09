@@ -1,9 +1,73 @@
 from collections import OrderedDict
 import copy
+import getpass
 import itertools
 import numpy as np
 from scipy import signal
 import time
+
+
+LOCAL_MODE = getpass.getuser() == 'tom'
+
+CONFIG = {
+    'halite_config_setting_divisor': 1.0,
+    'collect_smoothed_multiplier': 0.02,
+    'collect_actual_multiplier': 5.0,
+    'collect_less_halite_ships_multiplier_base': 0.55,
+    'collect_base_nearest_distance_exponent': 0.1,
+  
+    'return_base_multiplier': 8.0,
+    'return_base_less_halite_ships_multiplier_base': 0.85,
+    'early_game_return_base_additional_multiplier': 0.1,
+    'early_game_return_boost_step': 50,
+    'establish_base_smoothed_multiplier': 0.0,
+    
+    'establish_first_base_smoothed_multiplier_correction': 2.5,
+    'first_base_no_4_way_camping_spot_bonus': 500,
+    'establish_base_deposit_multiplier': 1.0,
+    'establish_base_less_halite_ships_multiplier_base': 1.0,
+    'max_attackers_per_base': 3*1,
+    
+    'attack_base_multiplier': 200.0,
+    'attack_base_less_halite_ships_multiplier_base': 0.9,
+    'attack_base_halite_sum_multiplier': 2.0, #*0,
+    'attack_base_run_enemy_multiplier': 1.0,
+    'attack_base_catch_enemy_multiplier': 1.0,
+    
+    'collect_run_enemy_multiplier': 10.0,
+    'return_base_run_enemy_multiplier': 2.0,
+    'establish_base_run_enemy_multiplier': 2.5,
+    'collect_catch_enemy_multiplier': 1.0,
+    'return_base_catch_enemy_multiplier': 1.0,
+    
+    'establish_base_catch_enemy_multiplier': 0.5,
+    'two_step_avoid_boxed_enemy_multiplier_base': 0.8,
+    'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
+    'min_consecutive_chase_extrapolate': 5,
+    'chase_return_base_exponential_bonus': 2.0,
+    
+    'ignore_catch_prob': 0.5,
+    'max_ships': 20,
+    'max_spawns_per_step': 1,
+    'nearby_ship_halite_spawn_constant': 3.0,
+    'nearby_halite_spawn_constant': 5.0,
+    
+    'remaining_budget_spawn_constant': 0.2,
+    'spawn_score_threshold': 75.0,
+    'boxed_in_halite_convert_divisor': 1.0,
+    'n_step_avoid_min_die_prob_cutoff': 0.1,
+    'n_step_avoid_window_size': 7,
+    
+    'influence_map_base_weight': 1.5,
+    'influence_map_min_ship_weight': 0.0,
+    'influence_weights_additional_multiplier': 4.0,
+    'influence_weights_exponent': 8.0,
+    'escape_influence_prob_divisor': 3.0,
+    
+    'rescue_ships_in_trouble': 1,
+    'max_spawn_relative_step_divisor': 100.0,
+    'no_spawn_near_base_ship_limit': 100,
+    }
 
 
 NORTH = "NORTH"
@@ -1193,7 +1257,6 @@ def update_scores_opponent_boxing_in(
     opponent_ship_id = opponent_ship_order[i]
     row = opponent_positions[0][opponent_ship_id]
     col = opponent_positions[1][opponent_ship_id]
-    sensible_target_actions = opponent_ships_sensible_actions[row, col]
     target_halite = halite_ships[row, col]
     my_less_halite_mask = np.logical_and(
       halite_ships < target_halite, ships_available)
@@ -1339,7 +1402,8 @@ def update_scores_opponent_boxing_in(
           # hard to guess the escape direction
           ship_target_1_distances = my_nearest_distances[
             :, double_window, double_window] == 1
-          next_step_attack = len(sensible_target_actions) == 0 and (
+          next_step_attack = len(
+            opponent_ships_sensible_actions[row, col]) == 0 and (
               ship_target_1_distances.sum() > 2)
               
           # if observation['step'] == 204:
@@ -1426,9 +1490,7 @@ def update_scores_opponent_boxing_in(
                 else:
                   attack_dir = None
                 move_ids_directions_next_attack[one_step_diff_id] = attack_dir
-          elif len(sensible_target_actions) == 0 or (
-              len(sensible_target_actions) == 1 and (
-                sensible_target_actions[0] == (0, 0))):
+          elif len(opponent_ships_sensible_actions[row, col]) == 0:
             # Inspect what directions I can move right next to when the
             # opponent has no valid escape actions. Use a greedy search to
             # determine the action selection order
@@ -1450,9 +1512,6 @@ def update_scores_opponent_boxing_in(
             can_box_immediately_counts_progress = np.copy(
               can_box_immediately_counts)
             not_boxed_dirs = np.ones(4, dtype=np.bool)
-            
-            # if observation['step'] == 343:
-            #   import pdb; pdb.set_trace()
             
             # Iteratively look for directions where I can box in in one step
             # when I have others that can box in the remaining directions
@@ -1484,8 +1543,7 @@ def update_scores_opponent_boxing_in(
                 picked = considered_dir_ids[picked_dir_id]
                 box_override_assignment_not_next_attack[picked[1]] = (
                   considered_dir, picked[4], picked[5])
-                can_box_immediately_counts_progress[considered_dir] = 0
-                # can_box_immediately_counts_progress[picked[3]] = 0
+                can_box_immediately_counts_progress[picked[3]] = 0
                 not_boxed_dirs[considered_dir] = 0
                 box_in_mask_rem_dirs_sum[picked[3]] -= 1
                 ship_priorities[picked[1]] -= 1e6
@@ -2458,22 +2516,21 @@ def update_scores_rescue_missions(
                   if HALF_PLANES_RUN[row, col][d][rescuer_row, rescuer_col]:
                     valid_move_dirs.append(d)
               
-              # Plan A: Let the non zero halite ship wait
-              # (stupid, this never happens - the non zero halite ship can not
-              # wait, it is being chased)
-              # if None in valid_directions:
-              #   rescue_dirs = get_dir_from_target(
-              #     rescuer_row, rescuer_col, row, col, grid_size)
-              #   safe_rescue_dirs = set(rescue_dirs) & set(
-              #     all_ship_scores[rescuer_k][6])
-              #   if len(safe_rescue_dirs) > 0:
-              #     rescue_dirs = list(safe_rescue_dirs)
-              #   rescue_dir = np_rng.choice(rescue_dirs)
-              #   rescuer_move_row, rescuer_move_col = move_ship_row_col(
-              #     rescuer_row, rescuer_col, rescue_dir, grid_size)
-              #   move_row = row
-              #   move_col = col
-              #   is_protected = True
+              # Plan A: Let the non zero halite ship wait (stupid, this never
+              # happens)
+              if None in valid_directions:
+                rescue_dirs = get_dir_from_target(
+                  rescuer_row, rescuer_col, row, col, grid_size)
+                safe_rescue_dirs = set(rescue_dirs) & set(
+                  all_ship_scores[rescuer_k][6])
+                if len(safe_rescue_dirs) > 0:
+                  rescue_dirs = list(safe_rescue_dirs)
+                rescue_dir = np_rng.choice(rescue_dirs)
+                rescuer_move_row, rescuer_move_col = move_ship_row_col(
+                  rescuer_row, rescuer_col, rescue_dir, grid_size)
+                move_row = row
+                move_col = col
+                is_protected = True
               
               # Plan B: Let the zero halite ship wait if there is no halite at
               # the considered square, and the chased ship can move to the
@@ -2523,8 +2580,10 @@ def update_scores_rescue_missions(
                     is_protected = True
                     break
                   
-              # Plan D: Consider other rescuers up to distance 3 if I
-              # can't wait at the current/nearby square
+              # # Plan D: Consider other rescuers up to distance 3 if I
+              # # can't wait at the current/nearby square
+              # import pdb; pdb.set_trace()
+              # x=1
               
             if is_protected:
               all_ship_scores[ship_k][0][move_row, move_col] = 1e8
@@ -2733,7 +2792,6 @@ def update_scores_rescue_missions(
           to_rescuer_dir = get_dir_from_target(
             row, col, rescuer_row, rescuer_col, grid_size)[0]
           if to_rescuer_dir not in all_ship_scores[ship_k][6]:
-            # It is probably wort the risk when I am rescuing a ship in trouble
             all_ship_scores[ship_k][6].append(to_rescuer_dir)
           increase_mask = get_mask_between_exclude_ends(
             target_base[0], target_base[1], rescuer_row, rescuer_col,
@@ -4646,24 +4704,73 @@ def get_config_actions(config, observation, player_obs, env_observation,
     ship_plans, player_obs, env_observation)
   
   mapped_actions.update(base_actions)
-  halite_spent = player_obs[0]-remaining_budget
   
-  step_details = {
-    'ship_scores': ship_scores,
-    'plan_ship_scores': plan_ship_scores,
-    'ship_plans': ship_plans,
-    'mapped_actions': mapped_actions,
-    'observation': observation,
-    'player_obs': player_obs,
-    'action_overrides': action_overrides,
-    'box_in_duration': box_in_duration,
-    'history_start_duration': history_start_duration,
-    'ship_scores_duration': ship_scores_duration,
-    'ship_plans_duration': ship_plans_duration,
-    'ship_map_duration': ship_map_duration,
+  return mapped_actions, history
+
+def get_base_pos(base_data, grid_size):
+  base_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  for _, v in base_data.items():
+    row, col = row_col_from_square_grid_pos(v, grid_size)
+    base_pos[row, col] = 1
+  
+  return base_pos
+
+def get_ship_halite_pos(ship_data, grid_size):
+  ship_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  ship_halite = np.zeros((grid_size, grid_size), dtype=np.float32)
+  for _, v in ship_data.items():
+    row, col = row_col_from_square_grid_pos(v[0], grid_size)
+    ship_pos[row, col] = 1
+    ship_halite[row, col] = v[1]
+  
+  return ship_pos, ship_halite
+
+def structured_env_obs(env_configuration, env_observation, active_id):
+  grid_size = env_configuration.size
+  halite = np.array(env_observation['halite']).reshape([
+    grid_size, grid_size])
+  
+  num_episode_steps = env_configuration.episodeSteps
+  step = env_observation.step
+  relative_step = step/(num_episode_steps-2)
+  
+  num_agents = len(env_observation.players)
+  rewards_bases_ships = []
+  for i in range(num_agents):
+    player_obs = env_observation.players[i]
+    reward = player_obs[0]
+    base_pos = get_base_pos(player_obs[1], grid_size)
+    ship_pos, ship_halite = get_ship_halite_pos(player_obs[2], grid_size)
+    rewards_bases_ships.append((reward, base_pos, ship_pos, ship_halite))
+    
+  # Move the agent's rewards_bases_ships to the front of the list
+  agent_vals = rewards_bases_ships.pop(active_id)
+  rewards_bases_ships = [agent_vals] + rewards_bases_ships
+  
+  return {
+    'halite': halite,
+    'relative_step': relative_step,
+    'rewards_bases_ships': rewards_bases_ships,
+    'step': step,
     }
+
+
+###############################################################################
+
+HISTORY = {}
+def my_agent(observation, env_config, **kwargs):
+  global HISTORY
+  rng_action_seed = kwargs.get('rng_action_seed', 0)
+  active_id = observation.player
+  current_observation = structured_env_obs(env_config, observation, active_id)
+  player_obs = observation.players[active_id]
   
-  # if observation['step'] == 15:
-  #   import pdb; pdb.set_trace()
-  
-  return mapped_actions, history, halite_spent, step_details
+  mapped_actions, HISTORY = get_config_actions(
+    CONFIG, current_observation, player_obs, observation, env_config, HISTORY,
+    rng_action_seed)
+     
+  if LOCAL_MODE:
+    # This is to allow for debugging of the history outside of the agent
+    return mapped_actions, copy.deepcopy(HISTORY)
+  else:
+    return mapped_actions

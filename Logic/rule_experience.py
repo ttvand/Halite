@@ -225,7 +225,8 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
                 #   import pdb; pdb.set_trace()
                 num_lost_ships[i] += 1
           elif prev_actions[ship_k] == "CONVERT" and (
-              prev_observation['step'] > 10):
+              prev_observation['relative_step'] >= 0.025) and (
+                prev_observation['relative_step'] <= 0.975):
             # The ship most likely got boxed in and was forced to convert. 
             # Note that this also counts lost ships due to losing the base.
             num_lost_ships[i] += 1
