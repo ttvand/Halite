@@ -3398,7 +3398,7 @@ def map_ship_plans_to_actions(
     num_attackers = len(attackers)
     if num_attackers > 1 and steps_remaining > 20:
       # If the base can not be defended: don't bother synchronizing the attack
-      # if observation['step'] == 360:
+      # if observation['step'] == 349:
       #   import pdb; pdb.set_trace()
       #   x=1
         
@@ -3514,6 +3514,7 @@ def map_ship_plans_to_actions(
   
   num_ships = len(ordered_ship_plans)
   action_overrides = np.zeros((7))
+  camping_ships_strategy = history['camping_ships_strategy']
   for i in range(num_ships):
     ship_k = ordered_ship_plans[i]
     row, col = row_col_from_square_grid_pos(
@@ -3561,11 +3562,23 @@ def map_ship_plans_to_actions(
     if not has_selected_action:
       (target_row, target_col, preferred_directions, ignore_base_collision,
        _, _) = ship_plans[ship_k]
+      
+      # Override the target row and column if this ship is an aggressive base
+      # camper and the base can not be defended
+      if ship_k in camping_ships_strategy:
+        base_location = camping_ships_strategy[ship_k][5]
+        consider_base_attack = camping_ships_strategy[ship_k][4]
+        base_distance = grid_distance(base_location[0], base_location[1],
+                                      row, col, grid_size)
+        if base_distance == 1 and consider_base_attack:
+          target_row = base_location[0]
+          target_col = base_location[1]
+          
       shortest_actions = get_dir_from_target(row, col, target_row, target_col,
                                              grid_size)
       
       if ignore_base_collision and not ignore_bad_attack_directions and (
-          target_row, target_col) in base_attackers:
+          (target_row, target_col) in base_attackers):
         
         can_defend = base_can_be_defended(
           base_attackers, target_row, target_col, stacked_bases, stacked_ships,
@@ -3600,6 +3613,7 @@ def map_ship_plans_to_actions(
           valid_move_positions.append((move_row, move_col))
           path_lookup_k = (move_row, move_col)
           if not path_lookup_k in shortest_path_count:
+            import pdb; pdb.set_trace()
             print("Path key lookup fail step", observation['step'], row, col,
                   ship_k, i)
             shortest_path_count[path_lookup_k] = 1
@@ -4025,6 +4039,8 @@ def decide_existing_base_spawns(
   total_ship_count = np.stack([
     rbs[2] for rbs in observation['rewards_bases_ships']]).sum()
   max_spawns = min(max_spawns, int(max_allowed_ships - my_ship_count))
+  # TODO: consider spawning more when I'm clearly winning and one of my
+  # opponents has many more ships (?)
   max_spawns = min(max_spawns, int(obs_halite.sum()/2/spawn_cost))
   relative_step = observation['relative_step']
   max_spawns = min(max_spawns, int(
@@ -4665,7 +4681,7 @@ def update_base_camping_strategy(
       win_preferred_score_diff[score_diffs < 0] /= 2
       
       opponent_scores_scaled = 1-win_preferred_score_diff/max(
-        50, steps_remaining)/15-1e2*(
+        100, steps_remaining)/15-1e2*(
           (scores[1:] < env_config.spawnCost) & (ship_counts[1:] == 0))
     
       if num_all_opponent_bases > 0:
@@ -5147,7 +5163,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'ship_map_duration': ship_map_duration,
     }
   
-  # if observation['step'] == 114:
+  # if observation['step'] == 349:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details

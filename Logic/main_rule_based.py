@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 33 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = {
@@ -23,7 +23,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': True,
+  'use_multiprocessing': False,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
@@ -116,7 +116,7 @@ config = {
     'establish_base_less_halite_ships_multiplier_base': 1.0,
     
     'max_attackers_per_base': 3*1,
-    'attack_base_multiplier': 200.0,
+    'attack_base_multiplier': 500.0,
     'attack_base_less_halite_ships_multiplier_base': 0.9,
     'attack_base_halite_sum_multiplier': 2.0, #*0,
     'attack_base_run_enemy_multiplier': 1.0,
