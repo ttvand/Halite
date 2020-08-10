@@ -3573,6 +3573,7 @@ def map_ship_plans_to_actions(
         if base_distance == 1 and consider_base_attack:
           target_row = base_location[0]
           target_col = base_location[1]
+          shortest_path_count[base_location] = 1.0
           
       shortest_actions = get_dir_from_target(row, col, target_row, target_col,
                                              grid_size)
@@ -3613,7 +3614,7 @@ def map_ship_plans_to_actions(
           valid_move_positions.append((move_row, move_col))
           path_lookup_k = (move_row, move_col)
           if not path_lookup_k in shortest_path_count:
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             print("Path key lookup fail step", observation['step'], row, col,
                   ship_k, i)
             shortest_path_count[path_lookup_k] = 1
