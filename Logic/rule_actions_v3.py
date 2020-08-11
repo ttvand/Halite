@@ -948,7 +948,7 @@ def scale_attack_scores_bases_ships(
   rel_score_max_y = initial_normalize_ship_diff/normalize_diff
   rel_score_multiplier = rel_normalized_diff*rel_score_max_y
   
-  # Factor 3: an opponent with less ships is more attractive to attack
+  # Factor 3: an opponent with less ships is more attractive to attack (??)
   rel_ship_count_multiplier = (my_ship_count+laplace_smoother_rel_ship_count)/(
     ship_counts+laplace_smoother_rel_ship_count)
   
@@ -1225,7 +1225,7 @@ def update_scores_opponent_boxing_in(
     my_less_halite_mask &= max_dist_mask
     box_pos = ROW_COL_BOX_MAX_DISTANCE_MASKS[row, col, double_window]
     
-    # if observation['step'] == 124 and row == 11 and col == 8:
+    # if observation['step'] == 157 and row == 13 and col == 1:
     #   import pdb; pdb.set_trace()
     
     if my_less_halite_mask.sum() >= min_attackers_to_box and should_attack[
@@ -1542,7 +1542,8 @@ def update_scores_opponent_boxing_in(
                 # if observation['step'] == 204:
                 #   import pdb; pdb.set_trace()
                 update_ship_scores.append(
-                  (ship_k, move_row, move_col, 1e5, None, None))
+                  (ship_k, move_row, move_col, 1e5, None, None, my_abs_row,
+                   my_abs_col))
             else:
               # Figure out if we should use this ship to attack the target -
               # there is no point in using too many ships!
@@ -1755,7 +1756,8 @@ def update_scores_opponent_boxing_in(
                   ship_one_step_from_covered_directions] = 1
                 update_ship_scores.append(
                   (ship_k, move_row, move_col, 1e5, opponent_distance,
-                   np.where(ship_covered_directions)[0]))
+                   np.where(ship_covered_directions)[0], my_abs_row,
+                   my_abs_col))
                 pos_taken[new_grid_pos] = 1
           
           # We can almost box the opponent in and rely on the opponent not
@@ -1791,13 +1793,13 @@ def update_scores_opponent_boxing_in(
               for dr in np.sort(drop_rows)[::-1]:
                 del update_ship_scores[dr]
             
-            for ship_k, move_row, move_col, new_collect_score, _, _ in (
-                update_ship_scores):
+            for (ship_k, move_row, move_col, new_collect_score, _, _,
+                 my_abs_row, my_abs_col) in update_ship_scores:
               ship_scores[ship_k][0][move_row, move_col] = new_collect_score
+              
+              # Flag the boxing in ships as unavailable for other hunts
+              ships_available[my_abs_row, my_abs_col] = 0
             
-            # Flag the boxing in ships as unavailable for other hunts
-            ships_available[box_pos & my_less_halite_mask] = 0
-  
   return ship_scores
 
 def get_no_zero_halite_neighbors(halite):
@@ -3570,7 +3572,12 @@ def map_ship_plans_to_actions(
         consider_base_attack = camping_ships_strategy[ship_k][4]
         base_distance = grid_distance(base_location[0], base_location[1],
                                       row, col, grid_size)
-        if base_distance == 1 and consider_base_attack:
+        
+        can_defend = base_can_be_defended(
+          base_attackers, base_location[0], base_location[1], stacked_bases,
+          stacked_ships, halite_ships)
+        
+        if base_distance == 1 and consider_base_attack and not can_defend:
           target_row = base_location[0]
           target_col = base_location[1]
           shortest_path_count[base_location] = 1.0

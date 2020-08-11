@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 33 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 1 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = {
@@ -110,15 +110,15 @@ config = {
     'establish_base_smoothed_multiplier': 0.0,
     
     'establish_first_base_smoothed_multiplier_correction': 2.5,
-    'first_base_no_4_way_camping_spot_bonus': 500,
-    'max_camper_ship_budget': 3,
+    'first_base_no_4_way_camping_spot_bonus': 300,
+    'max_camper_ship_budget': 3*0,
     'establish_base_deposit_multiplier': 1.0,
     'establish_base_less_halite_ships_multiplier_base': 1.0,
     
     'max_attackers_per_base': 3*1,
     'attack_base_multiplier': 500.0,
     'attack_base_less_halite_ships_multiplier_base': 0.9,
-    'attack_base_halite_sum_multiplier': 2.0, #*0,
+    'attack_base_halite_sum_multiplier': 2.0, #*0, # *0 makes it very aggressive
     'attack_base_run_enemy_multiplier': 1.0,
     
     'attack_base_catch_enemy_multiplier': 1.0,
