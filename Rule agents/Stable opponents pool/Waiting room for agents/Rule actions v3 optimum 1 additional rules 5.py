@@ -1,9 +1,74 @@
 from collections import OrderedDict
 import copy
+import getpass
 import itertools
 import numpy as np
 from scipy import signal
 import time
+
+
+LOCAL_MODE = getpass.getuser() == 'tom'
+
+CONFIG = {
+    'halite_config_setting_divisor': 1.0,
+    'collect_smoothed_multiplier': 0.02,
+    'collect_actual_multiplier': 5.0,
+    'collect_less_halite_ships_multiplier_base': 0.55,
+    'collect_base_nearest_distance_exponent': 0.1,
+  
+    'return_base_multiplier': 8.0,
+    'return_base_less_halite_ships_multiplier_base': 0.85,
+    'early_game_return_base_additional_multiplier': 0.1,
+    'early_game_return_boost_step': 50,
+    'establish_base_smoothed_multiplier': 0.0,
+    
+    'establish_first_base_smoothed_multiplier_correction': 2.5,
+    'first_base_no_4_way_camping_spot_bonus': 300,
+    'max_camper_ship_budget': 3*1,
+    'establish_base_deposit_multiplier': 1.0,
+    'establish_base_less_halite_ships_multiplier_base': 1.0,
+    
+    'max_attackers_per_base': 3*1,
+    'attack_base_multiplier': 500.0,
+    'attack_base_less_halite_ships_multiplier_base': 0.9,
+    'attack_base_halite_sum_multiplier': 2.0, #*0, # *0 makes it very aggressive
+    'attack_base_run_enemy_multiplier': 1.0,
+    
+    'attack_base_catch_enemy_multiplier': 1.0,
+    'collect_run_enemy_multiplier': 10.0,
+    'return_base_run_enemy_multiplier': 2.0,
+    'establish_base_run_enemy_multiplier': 2.5,
+    'collect_catch_enemy_multiplier': 1.0,
+    
+    'return_base_catch_enemy_multiplier': 1.0,
+    'establish_base_catch_enemy_multiplier': 0.5,
+    'two_step_avoid_boxed_enemy_multiplier_base': 0.8,
+    'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
+    'min_consecutive_chase_extrapolate': 5,
+    
+    'chase_return_base_exponential_bonus': 2.0,
+    'ignore_catch_prob': 0.5,
+    'max_ships': 20,
+    'max_spawns_per_step': 1,
+    'nearby_ship_halite_spawn_constant': 3.0,
+    
+    'nearby_halite_spawn_constant': 5.0,
+    'remaining_budget_spawn_constant': 0.2,
+    'spawn_score_threshold': 75.0,
+    'boxed_in_halite_convert_divisor': 1.0,
+    'n_step_avoid_min_die_prob_cutoff': 0.1,
+    
+    'n_step_avoid_window_size': 7,
+    'influence_map_base_weight': 1.5,
+    'influence_map_min_ship_weight': 0.0,
+    'influence_weights_additional_multiplier': 4.0,
+    'influence_weights_exponent': 8.0,
+    
+    'escape_influence_prob_divisor': 3.0,
+    'rescue_ships_in_trouble': 1,
+    'max_spawn_relative_step_divisor': 100.0,
+    'no_spawn_near_base_ship_limit': 100,
+    }
 
 
 NORTH = "NORTH"
@@ -239,7 +304,7 @@ def update_scores_enemy_ships(
     observation, ship_k, my_bases, my_ships, steps_remaining, history,
     escape_influence_probs, player_ids, env_obs_ids, env_observation,
     main_base_distances, nearest_base_distances, end_game_base_return,
-    camping_override_strategy, attack_campers_override_strategy):
+    camping_override_strategy):
   direction_halite_diff_distance_raw = {
     NORTH: [], SOUTH: [], EAST: [], WEST: []}
   my_bases_or_ships = np.logical_or(my_bases, my_ships)
@@ -253,29 +318,13 @@ def update_scores_enemy_ships(
     navigation_zero_halite_risk_threshold = camping_override_strategy[0]
     collect_grid_scores += camping_override_strategy[1]
     attack_base_scores += camping_override_strategy[2]
-    
-  if len(attack_campers_override_strategy) > 0:
-    ignore_opponent_row = attack_campers_override_strategy[0]
-    ignore_opponent_col = attack_campers_override_strategy[1]
-    ignore_opponent_distance = attack_campers_override_strategy[5]
-    collect_grid_scores[ignore_opponent_row, ignore_opponent_col] += (
-      attack_campers_override_strategy[2])
-  else:
-    ignore_opponent_row = None
-    ignore_opponent_col = None
-    ignore_opponent_distance = None
-    
   for row_shift in range(-2, 3):
     considered_row = (row + row_shift) % grid_size
     for col_shift in range(-2, 3):
       considered_col = (col + col_shift) % grid_size
       distance = np.abs(row_shift) + np.abs(col_shift)
       if distance <= 2:
-        if opponent_ships[considered_row, considered_col] and (
-            ignore_opponent_row is None or (((
-              considered_row != ignore_opponent_row) or (
-                considered_col != ignore_opponent_col)) and (
-                  ignore_opponent_distance > 2))):
+        if opponent_ships[considered_row, considered_col]:
           relevant_dirs = []
           halite_diff = halite_ships[row, col] - halite_ships[
             considered_row, considered_col]
@@ -542,8 +591,7 @@ def update_scores_enemy_ships(
           
           two_step_bad_directions.append(d)
           
-      if d not in two_step_bad_directions and not end_game_base_return and (
-          my_next_halite > 0):
+      if d not in two_step_bad_directions and not end_game_base_return:
         # For the remaining valid directions: compute a score that resembles 
         # the probability of being boxed in sometime in the future
         opponent_mask_lt = ROW_COL_MAX_DISTANCE_MASKS[
@@ -929,15 +977,12 @@ def get_valid_opponent_ship_actions(rewards_bases_ships, halite_ships, size):
 
 def scale_attack_scores_bases_ships(
     config, observation, player_obs, spawn_cost, main_base_distances,
-    weighted_base_mask, steps_remaining, obs_halite, halite_ships, history,
+    weighted_base_mask, steps_remaining, obs_halite, halite_ships,
     laplace_smoother_rel_ship_count=4, initial_normalize_ship_diff=10,
     final_normalize_ship_diff=2):
   stacked_bases = np.stack([rbs[1] for rbs in observation[
     'rewards_bases_ships']])
   my_bases = stacked_bases[0]
-  # Exclude bases that are persistently camped by opponents
-  for base_pos in history['my_camped_base_not_attacked_positions']:
-    my_bases[base_pos] = 0
   stacked_opponent_bases = stacked_bases[1:]
   stacked_ships = np.stack([rbs[2] for rbs in observation[
     'rewards_bases_ships']])
@@ -964,8 +1009,7 @@ def scale_attack_scores_bases_ships(
   rel_score_max_y = initial_normalize_ship_diff/normalize_diff
   rel_score_multiplier = rel_normalized_diff*rel_score_max_y
   
-  # Factor 3: an opponent with less ships is more attractive to attack since it
-  # is harder for them to defend the base
+  # Factor 3: an opponent with less ships is more attractive to attack (??)
   rel_ship_count_multiplier = (my_ship_count+laplace_smoother_rel_ship_count)/(
     ship_counts+laplace_smoother_rel_ship_count)
   
@@ -1019,6 +1063,7 @@ def get_influence_map(config, stacked_bases, stacked_ships, halite_ships,
   unique_halite_vals = np.sort(unique_vals).astype(np.int).tolist()
   num_ships = all_ships_halite.size
   
+  # TODO: double check!
   halite_ranks = [np.array(
     [unique_halite_vals.index(hs) for hs in halite_ships[
       stacked_ships[i]]]) for i in range(num_players)]
@@ -1073,12 +1118,8 @@ def get_influence_map(config, stacked_bases, stacked_ships, halite_ships,
 # main base and the values are used as a multiplier in the return to base
 # scores. Only the base with weight one is defended and is used as a basis for
 # deciding what nearby opponent bases to attack.
-def get_weighted_base_mask(stacked_bases, stacked_ships, observation,
-                           history):
+def get_weighted_base_mask(stacked_bases, stacked_ships, observation):
   my_bases = stacked_bases[0]
-  # Exclude bases that are persistently camped by opponents
-  for base_pos in history['my_camped_base_not_attacked_positions']:
-    my_bases[base_pos] = 0
   num_bases = my_bases.sum()
   grid_size = stacked_bases.shape[1]
   if num_bases == 0:
@@ -1197,15 +1238,6 @@ def update_scores_opponent_boxing_in(
       camping_row, camping_col = row_col_from_square_grid_pos(
         player_obs[2][ship_k][0], grid_size)
       ships_available[camping_row, camping_col] = 0 
-      
-  # Loop over the ships that attack opponent camplers and exclude them from the
-  # available mask
-  attack_opponent_campers = history['attack_opponent_campers']
-  for ship_k in attack_opponent_campers:
-    attacking_camper_row, attacking_camper_col = row_col_from_square_grid_pos(
-      player_obs[2][ship_k][0], grid_size)
-    ships_available[attacking_camper_row, attacking_camper_col] = 0 
-      
   my_ship_density = smooth2d(ships_available, smooth_kernel_dim=2)
   
   # Compute the priorities of attacking each ship
@@ -1452,6 +1484,8 @@ def update_scores_opponent_boxing_in(
             one_step_diff_ids = np.where(ship_target_1_distances)[0]
             if pos_taken[double_window, double_window]:
               # Add the remaining one step attackers with stay in place actions
+              # TODO: (maybe) add some randomness so that it is harder to
+              # escape.
               for one_step_diff_id in one_step_diff_ids:
                 if not one_step_diff_id in move_ids_directions_next_attack:
                   move_ids_directions_next_attack[one_step_diff_id] = None
@@ -1855,9 +1889,6 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   stacked_bases = np.stack(
     [rbs[1] for rbs in observation['rewards_bases_ships']])
   my_bases = stacked_bases[0]
-  # Exclude bases that are persistently camped by opponents
-  for base_pos in history['my_camped_base_not_attacked_positions']:
-    my_bases[base_pos] = 0
   obs_halite = np.maximum(0, observation['halite'])
   # Clip obs_halite to zero when gathering it doesn't add to the score
   # code: delta_halite = int(cell.halite * configuration.collect_rate)
@@ -1924,13 +1955,13 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
   
   # Get the weighted base mask
   weighted_base_mask, main_base_distances = get_weighted_base_mask(
-    stacked_bases, stacked_ships, observation, history)
+    stacked_bases, stacked_ships, observation)
   
   # Scale the opponent bases as a function of attack desirability
   opponent_bases_scaled, opponent_ships_scaled = (
     scale_attack_scores_bases_ships(
       config, observation, player_obs, spawn_cost, main_base_distances,
-      weighted_base_mask, steps_remaining, obs_halite, halite_ships, history))
+      weighted_base_mask, steps_remaining, obs_halite, halite_ships))
 
   # Get the influence map
   (influence_map, priority_scores, ship_priority_weights,
@@ -1950,9 +1981,6 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
     base_location = camping_ships_strategy[ship_k][5]
     consider_base_attack = camping_ships_strategy[ship_k][4]
     camp_attack_mask[base_location] = consider_base_attack
-    
-  # Attack opponent ships that camp out next to my base
-  attack_opponent_campers = history['attack_opponent_campers']
   
   ship_scores = {}
   for i, ship_k in enumerate(player_obs[2]):
@@ -2054,7 +2082,6 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
     # enemy ships that carry less halite
     # Also incorporate the camping score override behavior here
     camping_override_strategy = camping_ships_strategy.get(ship_k, ())
-    attack_campers_override_strategy = attack_opponent_campers.get(ship_k, ())
     (collect_grid_scores, base_return_grid_multiplier, establish_base_scores,
      attack_base_scores, preferred_directions, valid_directions,
      agent_surrounded, two_step_bad_directions, n_step_step_bad_directions,
@@ -2068,7 +2095,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
        observation, ship_k, my_bases, my_ships, steps_remaining, history,
        escape_influence_probs, player_ids, env_obs_ids, env_observation,
        main_base_distances, nearest_base_distances, end_game_base_return,
-       camping_override_strategy, attack_campers_override_strategy)
+       camping_override_strategy)
        
     # Update the scores as a function of blocking enemy bases and my early
     # game initial base
@@ -2119,7 +2146,7 @@ def get_mask_between_exclude_ends(r1, c1, r2, c2, grid_size):
 
 def consider_restoring_base(
     observation, env_config, all_ship_scores, player_obs, convert_cost, np_rng,
-    history, max_considered_attackers=3, halite_on_board_mult=1e-6):
+    max_considered_attackers=3, halite_on_board_mult=1e-6):
   obs_halite = np.maximum(0, observation['halite'])
   grid_size = obs_halite.shape[0]
   collect_rate = env_config.collectRate
@@ -2150,14 +2177,6 @@ def consider_restoring_base(
   if can_deposit_halite:
     # Decide what ship to convert - it should be relatively central, have high
     # ship halite on board and be far away from opponent ships and bases
-    # Also, don't build a new base next to a base where there is a camper
-    # that I am not attacking
-    next_to_my_camped_not_attacked = np.zeros(
-      (grid_size, grid_size), dtype=np.bool)
-    for base_pos in history['my_camped_base_not_attacked_positions']:
-      next_to_my_camped_not_attacked[ROW_COL_BOX_MAX_DISTANCE_MASKS[
-        base_pos[0], base_pos[1], 2]] = 1
-    
     my_ship_density = smooth2d(my_ships, smooth_kernel_dim=10)
     opponent_base_density = smooth2d(opponent_bases, smooth_kernel_dim=5)
     opponent_ship_density = smooth2d(opponent_ships, smooth_kernel_dim=5)
@@ -2182,13 +2201,9 @@ def consider_restoring_base(
       convert_priority_scores[i] = ship_halite + 100*(
         my_ship_density-opponent_ship_density)[row, col] - 200*(
           opponent_base_density[row, col]) - 1e12*int(
-            not can_defend or not can_afford or next_to_my_camped_not_attacked[
-              row, col])
+            not can_defend or not can_afford)
           
     can_defend_converted = convert_priority_scores.max() > -1e11
-    
-  # if observation['step'] == 98:
-  #   import pdb; pdb.set_trace()
     
   if can_defend_converted:
     convert_k = list(player_obs[2].keys())[np.argmax(convert_priority_scores)]
@@ -2219,10 +2234,10 @@ def consider_restoring_base(
         # Gather with some low probability since we may not have enough halite
         # to convert a ship
         if obs_halite[row, col] > 0 and np_rng.uniform() < 0.2:
-          all_ship_scores[ship_k][0][row, col] = 2e6
-        ensure_move_mask = 1e6*DISTANCE_MASKS[(gather_row, gather_col)]
+          all_ship_scores[ship_k][0][row, col] = 2000
+        ensure_move_mask = 1000*DISTANCE_MASKS[(gather_row, gather_col)]
       else:
-        ensure_move_mask = np_rng.uniform(1e5, 1e9, (grid_size, grid_size))
+        ensure_move_mask = np_rng.uniform(0, 1e-9, (grid_size, grid_size))
         ensure_move_mask[row, col] = 0
       all_ship_scores[ship_k][2][:] += ensure_move_mask
       
@@ -2231,8 +2246,8 @@ def consider_restoring_base(
   return all_ship_scores, can_deposit_halite, restored_base_pos
 
 def protect_main_base(observation, env_config, all_ship_scores, player_obs,
-                      defend_override_base_pos, history,
-                      max_considered_attackers=3, halite_on_board_mult=1e-6):
+                      defend_override_base_pos, max_considered_attackers=3,
+                      halite_on_board_mult=1e-6):
   opponent_ships = np.stack([
     rbs[2] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
   defend_base_ignore_collision_key = None
@@ -2265,7 +2280,6 @@ def protect_main_base(observation, env_config, all_ship_scores, player_obs,
     # to be from the base !with no halite on board! by the end of the next turn
     # Approximate since returning ships are expected to always move towards the
     # base and other ships are assumed to be moving away.
-    attack_opponent_campers = history['attack_opponent_campers']
     for i, ship_k in enumerate(player_obs[2]):
       row, col = row_col_from_square_grid_pos(
         player_obs[2][ship_k][0], grid_size)
@@ -2278,13 +2292,6 @@ def protect_main_base(observation, env_config, all_ship_scores, player_obs,
         row, col, base_row, base_col, grid_size)
       can_not_move_to_base = int((ship_halite != 0) and len(
         set(to_base_directions) & set(ship_scores[9])) == 0)
-      
-      # Exclude ships that attack opponent campers from the base defense logic
-      if ship_k in attack_opponent_campers:
-        current_distance = 1e2
-        ship_halite = 1e6
-        can_not_move_to_base = True
-      
       ship_base_distances[i, 0] = current_distance
       ship_base_distances[i, 1] = current_distance + 1 - int(2*is_returning)
       ship_base_distances[i, 2] = ship_halite
@@ -2380,6 +2387,7 @@ def protect_main_base(observation, env_config, all_ship_scores, player_obs,
           col = int(ship_base_distances[ship_id, 4])
           if distance_to_base <= 1:
             # Stay or move to the base; or stay 1 step away
+            # TODO: attack the attackers when the base is safe
             if i == 0:
               ship_scores[1][base_row, base_col] += 1e6*(
                 1+max_considered_attackers-i)
@@ -2852,9 +2860,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
                    convert_first_ship_on_None_action=True):
   ship_plans_start_time = time.time()
   my_bases = observation['rewards_bases_ships'][0][1]
-  # Exclude bases that are persistently camped by opponents
-  for base_pos in history['my_camped_base_not_attacked_positions']:
-    my_bases[base_pos] = 0
   opponent_bases = np.stack(
     [rbs[1] for rbs in observation['rewards_bases_ships'][1:]]).sum(0) > 0
   can_deposit_halite = my_bases.sum() > 0
@@ -2908,13 +2913,11 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
               all_ship_scores[ship_k][3][mask_avoid] -= 1e5
             
   # Decide whether to build a new base after my last base has been destroyed.
-  # A camped base where I do not consider attacking the campers is also
-  # considered destroyed
   if num_bases == 0 and my_ship_count > 1:
     all_ship_scores, can_deposit_halite, defend_override_base_pos = (
       consider_restoring_base(
         observation, env_config, all_ship_scores, player_obs, convert_cost,
-        np_rng, history))
+        np_rng))
     num_restored_bases = int(can_deposit_halite)
     num_bases = num_restored_bases
   elif num_bases > 1:
@@ -2927,9 +2930,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     num_restored_bases = 0
     defend_override_base_pos = None
     
-  # if observation['step'] == 98:
-  #   import pdb; pdb.set_trace()
-    
   # Decide to redirect ships to the base to avoid the last base being destroyed
   # by opposing ships
   defend_base_ignore_collision_key = None
@@ -2940,7 +2940,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     (all_ship_scores, defend_base_ignore_collision_key,
      main_base_protected, ignore_base_collision_ship_keys) = protect_main_base(
        observation, env_config, all_ship_scores, player_obs,
-       defend_override_base_pos, history)
+       defend_override_base_pos)
   else:
     main_base_protected = True
     
@@ -3316,7 +3316,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     ship_priority_scores[ship_order[:(i+1)]] += 1
     ship_order = np.argsort(-ship_priority_scores)
     
-  # if observation['step'] == 98:
+  # if observation['step'] == 55:
   #   import pdb; pdb.set_trace()
     
   ship_plans_duration = time.time() - ship_plans_start_time
@@ -3592,7 +3592,7 @@ def map_ship_plans_to_actions(
               ship_scores[ship_k][2][row, col] < 1e6):
         # Override the convert logic - it's better to lose some ships than to
         # convert too often (good candidate for stateful logic)
-        # We enter this path when the base is reconstructed
+        # This can happen when the base is reconstructed
         if not ship_scores[ship_k][6]:
           # It's better not to lose halite to some opponents
           # TODO: make it a function of the current score, ships and base count
@@ -3941,7 +3941,7 @@ def map_ship_plans_to_actions(
                 else:
                   # This is an opponent base - add an attack base bonus if
                   # it can not be defended
-                  # TODO: remove all asserts in submission
+                  # TODO: remove in submission
                   attack_base_bonus = 0
                   print("BOXED IN NEXT TO AN OPPONENT BASE!")
                   assert opponent_bases[move_row, move_col]
@@ -4672,61 +4672,22 @@ def update_zero_halite_ship_behavior(
 
 def update_base_camping_strategy(
     config, history, observation, env_observation, stacked_ships, env_obs_ids,
-    env_config, np_rng, continued_camping_bonus=0.2, corner_camping_patience=3,
-    other_camping_patience=10, max_non_unique_campers=2):
+    env_config, continued_camping_bonus=0.2):
   grid_size = stacked_ships.shape[1]
   num_players = stacked_ships.shape[0]
   my_ships_obs = env_observation.players[env_obs_ids[0]][2]
-  stacked_bases = np.stack(
-    [rbs[1] for rbs in observation['rewards_bases_ships']])
-  halite_ships = np.stack([
-        rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
-  halite_ships[stacked_ships.sum(0) == 0] = -1e-9
-  all_bases = stacked_bases.sum(0) > 0
-  player_ids = -1*np.ones((grid_size, grid_size), dtype=np.int)
-  for i in range(stacked_ships.shape[0]):
-    player_ids[stacked_ships[i]] = i
-    player_ids[stacked_bases[i]] = i
-    
+  
   if observation['step'] == 0:
     history['camping_ships_strategy'] = {}
     history['camping_ships_targets'] = {}
     history['remaining_camping_budget'] = config['max_camper_ship_budget']
     history['camping_phase_opponents'] = [2 for _ in range(num_players)]
-    history['camping_attack_opponent_budget'] = [2 for _ in range(num_players)]
     history['camping_phase_2_details_opponents'] = [(0, 0) for _ in range(
       num_players)]
     history['camping_phase_3_4_ignore_threats_counter'] = [0 for _ in range(
       num_players)]
     history['base_deposit_data'] = [[] for _ in range(num_players)]
-    history['obs_base_camping_behavior'] = {}
-    history['attack_opponent_campers'] = {}
-    history['my_camped_base_not_attacked_positions'] = []
   else:
-    # Compute the current approximate player score
-    scores = np.array(
-      [rbs[0] for rbs in observation['rewards_bases_ships']])
-    my_score = scores[0]
-    num_my_ships = stacked_ships[0].sum()
-    prev_stacked_bases = np.stack(
-      [rbs[1] for rbs in history['prev_step']['observation'][
-        'rewards_bases_ships']])
-    halite_cargos = np.array(
-      [rbs[3].sum() for rbs in observation['rewards_bases_ships']])
-    obs_halite = np.maximum(0, observation['halite'])
-    collect_rate = env_config.collectRate
-    obs_halite[obs_halite < 1/collect_rate] = 0
-    opponent_base_counts = stacked_bases[1:].sum((1, 2))
-    num_all_opponent_bases = opponent_base_counts.sum()
-    ship_counts = stacked_ships.sum((1, 2))
-    all_ship_count = ship_counts.sum()
-    steps_remaining = env_config.episodeSteps-1-observation['step']
-    obs_halite_sum = observation['halite'].sum()
-    ship_value = min(env_config.spawnCost,
-                     steps_remaining*obs_halite_sum**0.6/(
-                       all_ship_count+1e-9))
-    current_scores = scores+halite_cargos+ship_value*ship_counts
-    
     # Keep track of the deposit location of all opponents (used to decide
     # what bases to attack)
     for player_id in range(1, num_players):
@@ -4745,214 +4706,6 @@ def update_base_camping_strategy(
           if halite_deposited > 0:
             history['base_deposit_data'][player_id].append((
               player_base_pos_to_key[ship_position], observation['step']))
-            
-    # Keep track of the non friendly zero halite behavior near all bases
-    base_locations = np.where(all_bases)
-    prev_base_camping_behavior = history['obs_base_camping_behavior']
-    obs_base_camping_behavior = {}
-    num_bases = base_locations[0].size
-    for base_id in range(num_bases):
-      base_row = base_locations[0][base_id]
-      base_col = base_locations[1][base_id]
-      base_k = (base_row, base_col)
-      base_player_id = player_ids[base_k]
-      not_my_base = base_player_id > 0
-      around_base_mask = ROW_COL_BOX_MAX_DISTANCE_MASKS[base_row, base_col, 1]
-      zero_halite_near_base_mask = edge_aware_square_subset_mask(
-        (player_ids != base_player_id) & (halite_ships == 0), base_row,
-        base_col, window=1, box=around_base_mask, grid_size=grid_size)
-      zero_halite_near_base_players = edge_aware_square_subset_mask(
-        player_ids, base_row, base_col, window=1, box=around_base_mask,
-        grid_size=grid_size)
-      
-      if zero_halite_near_base_mask.sum() > 0:
-        if base_k in prev_base_camping_behavior:
-          prev_camping = prev_base_camping_behavior[base_k]
-          prev_zero_halite_near_base_mask = prev_camping[3]
-          prev_corner_camping_counter = prev_camping[4]
-          prev_other_camping_counter = prev_camping[5]
-          prev_zero_halite_near_base_players = prev_camping[6]
-        else:
-          prev_zero_halite_near_base_mask = np.zeros_like(
-            zero_halite_near_base_mask)
-          prev_corner_camping_counter = np.zeros(9)
-          prev_other_camping_counter = np.zeros(9)
-          prev_zero_halite_near_base_players = -1*np.ones(9)
-        
-        # Count the number of zero halite opponents that stay at the same
-        # location (switching zero halite ships within the same team would also
-        # qualify here)
-        stay_near_base = prev_zero_halite_near_base_mask & (
-          zero_halite_near_base_mask) & (
-            prev_zero_halite_near_base_players == (
-              zero_halite_near_base_players ))
-        num_stay_near_base = stay_near_base.sum()
-        num_my_stay_near_base = (
-          stay_near_base & (zero_halite_near_base_players == 0)).sum()
-        
-        # Inspect if there is any ship that statically remains at a base corner
-        stay_base_corner = (np.mod(np.arange(9), 2) == 1) & (
-          stay_near_base)
-        num_my_stay_near_base_corner = (
-          stay_base_corner & (zero_halite_near_base_players == 0)).sum()
-        
-        other_camping_counter = prev_other_camping_counter
-        other_camping_counter[stay_near_base] += 1
-        other_camping_counter[~stay_near_base] = 0
-        
-        if np.any(stay_base_corner):
-          corner_camping_counter = prev_corner_camping_counter
-          corner_camping_counter[stay_base_corner] += 1
-          corner_camping_counter[~stay_base_corner] = 0
-          attack_corner_camper = np.any(
-            corner_camping_counter >= corner_camping_patience)
-          
-          # LEGEND:
-          # obs_base_camping_behavior[k] = (consider_for_camping_target,
-          # attack_corner_camper, attack_non_corner_camper,
-          # zero_halite_near_base_mask, corner_camping_counter,
-          # zero_halite_near_base_players)
-          
-          obs_base_camping_behavior[base_k] = (
-            not_my_base and num_my_stay_near_base_corner > 0,
-            attack_corner_camper, False, zero_halite_near_base_mask,
-            corner_camping_counter, other_camping_counter,
-            zero_halite_near_base_players)
-        else:
-          attack_other_camper = np.any(
-            other_camping_counter >= other_camping_patience)
-          obs_base_camping_behavior[base_k] = (
-            not_my_base and ((num_stay_near_base-num_my_stay_near_base) < 2),
-            False, attack_other_camper, zero_halite_near_base_mask,
-            np.zeros(9), other_camping_counter,
-            zero_halite_near_base_players)
-      else:
-        obs_base_camping_behavior[base_k] = (
-          not_my_base, False, False, zero_halite_near_base_mask, np.zeros(9),
-          np.zeros(9), -1*np.ones(9))
-        
-    history['obs_base_camping_behavior'] = obs_base_camping_behavior
-    
-    
-    # Update the opponent camper attack budget based on my planned opponent
-    # camper ship attacks
-    for k in history['attack_opponent_campers']:
-      if k in env_observation.players[env_obs_ids[0]][2]:
-        # My attacking ship is still alive - add it back to the attack budget
-        opponent_id = history['attack_opponent_campers'][k][4]
-        history['camping_attack_opponent_budget'][opponent_id] += 1
-    history['attack_opponent_campers'] = {}
-    
-    # Decide on which campers I should attack or if I should create a new base
-    num_my_bases = stacked_bases[0].sum()
-    my_zero_halite_excluded_from_camping = np.zeros_like(stacked_ships[0])
-    my_zero_halite_ships_pos = np.where(
-        (halite_ships == 0) & stacked_ships[0])
-    my_num_zero_halite_ships = my_zero_halite_ships_pos[0].size
-    history['my_camped_base_not_attacked_positions'] = []
-    if num_my_bases > 0:
-      ship_pos_to_key = {}
-      for i in range(num_players):
-        ship_pos_to_key.update({
-          v[0]: k for k, v in env_observation.players[
-            env_obs_ids[i]][2].items()})
-      for base_k in obs_base_camping_behavior:
-        if stacked_bases[0, base_k[0], base_k[1]]:
-          # Only attack campers around my previous step main base
-          opp_camping_behavior = obs_base_camping_behavior[base_k]
-          
-          # if observation['step'] == 84:
-          #   import pdb; pdb.set_trace()
-          
-          if num_my_bases == 1 or (
-              base_k == history['prev_step']['my_main_base_location']):
-            if opp_camping_behavior[1] or opp_camping_behavior[2]:
-              my_score_rank = (current_scores >= current_scores[0]).sum()
-              
-              # Loop over the opponent camping ships which have to be punished
-              offending_ship_flat_pos = np.where((
-                opp_camping_behavior[4] >= corner_camping_patience) | (
-                  opp_camping_behavior[5] >= other_camping_patience))[0]
-              offending_ship_rows = np.mod(
-                base_k[0] + (offending_ship_flat_pos//3) - 1, grid_size)
-              offending_ship_cols = np.mod(
-                base_k[1] + np.mod(offending_ship_flat_pos, 3) - 1, grid_size)
-              for i in range(offending_ship_flat_pos.size):
-                opponent_row = offending_ship_rows[i]
-                opponent_col = offending_ship_cols[i]
-                opponent_id = player_ids[opponent_row, opponent_col]
-                opponent_score_rank = (
-                  current_scores >= current_scores[opponent_id]).sum()
-                if (my_score < env_config.convertCost and num_my_ships > 4) or(
-                    opponent_score_rank+my_score_rank <= 3) or (
-                    my_score_rank == 1) or (
-                      opponent_score_rank+my_score_rank == 4 and (
-                        observation['relative_step'] < 0.4)) or (
-                    history['camping_attack_opponent_budget'][opponent_id] > 0):
-                  # Attack the opponent if there is a zero halite ship nearby
-                  my_zero_halite_distances = DISTANCES[
-                    opponent_row, opponent_col][my_zero_halite_ships_pos]
-                  my_zero_halite_at_base = (DISTANCES[base_k][
-                    my_zero_halite_ships_pos] == 0)
-                  
-                  if my_num_zero_halite_ships == 0 or (
-                      my_zero_halite_distances.min() >= 5):
-                    # import pdb; pdb.set_trace()
-                    history['my_camped_base_not_attacked_positions'].append(
-                      base_k)
-                  else:
-                    # Attack the ship if I have a non base ship at distance <= 3
-                    # with the non base ship.
-                    # Otherwise: attack the ship with some probability with the
-                    # base ship
-                    safe_attack_ships = np.where((
-                      my_zero_halite_distances <= 3) & (
-                        ~my_zero_halite_at_base))[0]
-                    defender_id = -1
-                    
-                    # If it takes too long for a safe attack: attack from the
-                    # base anyway
-                    edge_attack_from_base_prob = (
-                      opp_camping_behavior[4].max()-(
-                        corner_camping_patience+2))/4
-                    if safe_attack_ships.size > 0 and (
-                        edge_attack_from_base_prob) < np_rng.uniform():
-                      defender_id = safe_attack_ships[
-                        np.where(my_zero_halite_distances[
-                          safe_attack_ships] == (my_zero_halite_distances[
-                            safe_attack_ships].min()))[0][0]]
-                    else:
-                      # Attack the camper with a probability so that that it is
-                      # hard to model (losing the base is always worse).
-                      if np_rng.uniform() < 0.5:
-                        defender_id = np.where(my_zero_halite_distances == (
-                            my_zero_halite_distances.min()))[0][0]
-                        
-                    if defender_id >= 0:
-                      defender_row = my_zero_halite_ships_pos[0][defender_id]
-                      defender_col = my_zero_halite_ships_pos[1][defender_id]
-                      defender_k = ship_pos_to_key[
-                        defender_row*grid_size + defender_col]
-                      opponent_k = ship_pos_to_key[
-                        opponent_row*grid_size + opponent_col]
-                      opponent_distance = my_zero_halite_distances[defender_id]
-                      history['attack_opponent_campers'][defender_k] = (
-                        opponent_row, opponent_col, 1e10, opponent_k,
-                        opponent_id, opponent_distance)
-                      my_zero_halite_excluded_from_camping[
-                        defender_row, defender_col] = True
-                      history['camping_attack_opponent_budget'][
-                        opponent_id] -= 1
-                else:
-                  history['my_camped_base_not_attacked_positions'].append(
-                    base_k)
-                      
-          else:
-            if opp_camping_behavior[1] or opp_camping_behavior[2]:
-              # Flag the base as bad (there is a camper present), and don't
-              # consider it when returning to a base
-              # import pdb; pdb.set_trace()
-              history['my_camped_base_not_attacked_positions'].append(base_k)
     
   if (observation['relative_step'] >= 0.15):
     remaining_camping_budget = history['remaining_camping_budget']
@@ -4963,8 +4716,35 @@ def update_base_camping_strategy(
     camping_phase_opponents = copy.copy(history['camping_phase_opponents'])
     prev_camping_phase_opponents = copy.copy(
       history['camping_phase_opponents'])
-    prev_opponent_bases = history['prev_step']['stacked_bases'][1:].sum(0) > 0
     if remaining_camping_budget > 0 or (number_already_camping > 0):
+      # Compute the current approximate player score
+      scores = np.array(
+        [rbs[0] for rbs in observation['rewards_bases_ships']])
+      stacked_bases = np.stack(
+        [rbs[1] for rbs in observation['rewards_bases_ships']])
+      prev_stacked_bases = np.stack(
+        [rbs[1] for rbs in history['prev_step']['observation'][
+          'rewards_bases_ships']])
+      halite_ships = np.stack([
+        rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
+      halite_ships[stacked_ships.sum(0) == 0] = -1e-9
+      halite_cargos = np.array(
+        [rbs[3].sum() for rbs in observation['rewards_bases_ships']])
+      obs_halite = np.maximum(0, observation['halite'])
+      collect_rate = env_config.collectRate
+      obs_halite[obs_halite < 1/collect_rate] = 0
+      opponent_base_counts = stacked_bases[1:].sum((1, 2))
+      num_all_opponent_bases = opponent_base_counts.sum()
+      ship_counts = stacked_ships.sum((1, 2))
+      all_ship_count = ship_counts.sum()
+      my_num_zero_halite_ships = (halite_ships[stacked_ships[0]] == 0).sum()
+      steps_remaining = env_config.episodeSteps-1-observation['step']
+      obs_halite_sum = observation['halite'].sum()
+      ship_value = min(env_config.spawnCost,
+                       steps_remaining*obs_halite_sum**0.6/(
+                         all_ship_count+1e-9))
+      current_scores = scores+halite_cargos+ship_value*ship_counts
+      
       # Aim higher than the current ranking: being behind is only counted half
       # as much as being ahead to determine who to attack
       score_diffs = current_scores[0]-current_scores[1:]
@@ -4975,11 +4755,6 @@ def update_base_camping_strategy(
         100, steps_remaining)/15-1e2*(
           (scores[1:] < env_config.spawnCost) & (ship_counts[1:] == 0))
     
-      # Always keep targeting the number two when I am the number one
-      my_score_rank = (current_scores >= current_scores[0]).sum()
-      if my_score_rank == 1:
-        opponent_scores_scaled[np.argmax(opponent_scores_scaled)] = 1e-9
-          
       if num_all_opponent_bases > 0:
         # Compute target scores for each of the opponent bases
         base_camping_scores = {}
@@ -5006,12 +4781,10 @@ def update_base_camping_strategy(
               if deposit_data.size == 0:
                 relative_deposit_base_score = 1
               else:
-                relative_deposit_base_score = min(1, (deposit_data[:, 0] == (
-                  base_key)).mean() + 1e-2)
-              should_consider_camp_penalty = -1*int(
-                not obs_base_camping_behavior[(base_row, base_col)][0])
+                relative_deposit_base_score = (deposit_data[:, 0] == (
+                  base_key)).mean()
               base_camping_score = opponent_scores_scaled[player_id-1]*(
-                relative_deposit_base_score)+should_consider_camp_penalty
+                relative_deposit_base_score)
               base_camping_scores[(base_row, base_col)] = base_camping_score
         
         all_opponent_bases = list(base_camping_scores.keys())
@@ -5050,7 +4823,6 @@ def update_base_camping_strategy(
             #   - 2 -> 6: My camping ship is not aggressively attacked but
             #             there is no zero halite square at distance 1 of the
             #             base
-            #   - 6 -> 7: My camping ship is aggressively attacked
             #   - 2 -> 7: My camping ship is aggressively attacked
             if opponent_prev_camping_phase == 2 and (
                 camping_phase_opponents[opponent_id] == 2):
@@ -5094,23 +4866,6 @@ def update_base_camping_strategy(
               
               history['camping_phase_2_details_opponents'][opponent_id] = (
                 num_halite_ships_returned, non_aggression_counter)
-              
-            elif opponent_prev_camping_phase == 6:
-              # Some nice code duplication
-              # Update the number of opponent non zero halite ships returned
-              # to the base
-              opponent_pos_to_ship = {v[0]: k for k, v in (
-                env_observation.players[env_obs_ids[opponent_id]][2]).items()}
-              opponent_prev_ships_obs = prev_env_observation.players[
-                env_obs_ids[opponent_id]][2]
-              aggression_occurred = (prev_pos in opponent_pos_to_ship) and (
-                opponent_prev_ships_obs[
-                  opponent_pos_to_ship[prev_pos]][1] == 0)
-              
-              # If an aggression occurred: move to phase 7.
-              if aggression_occurred:
-                camping_phase_opponents[opponent_id] = 7
-              
             elif opponent_prev_camping_phase in [3, 4]:
               # If I remain at a zero halite square at a distance of 1 of the
               # target and the opponent repeatedly ignores my threat: go to
@@ -5152,36 +4907,24 @@ def update_base_camping_strategy(
             # print("Camper destroyed", ship_k, prev_row, prev_col, base_target,
             #       observation['step'])
             # import pdb; pdb.set_trace()
-            
-            # Don't subtract a ship from the budget if I ended up attacking a
-            # base
             delete_keys.append(ship_k)
             number_already_camping -= 1
-            my_prev_move = history['prev_step']['my_ship_actions'][ship_k]
-            my_prev_row, my_prev_col = row_col_from_square_grid_pos(
-              history['prev_step']['env_observation'].players[
-                env_obs_ids[0]][2][ship_k][0], grid_size)
-            my_moved_row, my_moved_col = move_ship_row_col(
-              my_prev_row, my_prev_col, my_prev_move, grid_size)
-            if not prev_opponent_bases[my_moved_row, my_moved_col]:
-              remaining_camping_budget -= 1
+            remaining_camping_budget -= 1
         
         for del_ship_k in delete_keys:
           del prev_camping_ships_targets[del_ship_k]
         
-        # Camping ships participate in opponent hunts depending on the phase
+        # Only some camping ships don't participate in opponent hunts
         max_campers_assigned = min([
           int(observation['relative_step']*8),
           remaining_camping_budget,
           100*int(opponent_scores_scaled.max() > 0),
           ])
-        num_interesting_bases = (
-          np.array(list(base_camping_scores.values())) > 0).sum()
         num_campers_assigned = min([
-          num_all_opponent_bases + max_non_unique_campers,
+          num_all_opponent_bases,
           max(number_already_camping, max_campers_assigned),
-          my_num_zero_halite_ships-my_zero_halite_excluded_from_camping.sum(),
-          num_interesting_bases + max_non_unique_campers,
+          my_num_zero_halite_ships,
+          (np.array(list(base_camping_scores.values())) > 0).sum(),
           ])
         
         # Assign the campers to the top identified opponent bases
@@ -5189,51 +4932,11 @@ def update_base_camping_strategy(
         if num_campers_assigned > 0:
           my_ship_pos_to_key = {v[0]: k for k, v in my_ships_obs.items()}
           my_zero_halite_ship_positions = np.where(
-            stacked_ships[0] & (halite_ships == 0) & (
-              ~my_zero_halite_excluded_from_camping))
+            stacked_ships[0] & (halite_ships == 0))
           target_pos_scores = np.array([list(k) + [v] for k, v in (
             base_camping_scores.items())])
-          target_pos_scores = np.concatenate([np.zeros(
-            (target_pos_scores.shape[0], 1)), target_pos_scores], 1)
-          for score_id in range(target_pos_scores.shape[0]):
-            base_row = int(target_pos_scores[score_id, 1])
-            base_col = int(target_pos_scores[score_id, 2])
-            opponent_id = np.where(stacked_bases[
-              :, base_row, base_col])[0][0]
-            target_pos_scores[score_id, 0] = camping_phase_opponents[
-              opponent_id]
-          
           target_rows = np.argsort(-target_pos_scores[:, -1])[
             :num_campers_assigned]
-          
-          consider_non_unique_base_attack = np.any(
-            target_pos_scores[target_rows, -1] <= 0) or target_rows.size < (
-              num_campers_assigned)
-          if consider_non_unique_base_attack:
-            # Only continue if there is a target opponent which is in camping
-            # phase 6 or 7, and the number of assigned campers is strictly
-            # greater than the number of positive base camping scores.
-            # Update num_campers_assigned to the number of positive base
-            # camping scores if I don't find such a base
-            target_rows = target_rows[target_pos_scores[target_rows, -1] > 0]
-            num_valid_targeted_bases = target_rows.size
-            num_unassigned_campers = num_campers_assigned-(
-              num_valid_targeted_bases)
-            bases_ids_that_can_take_more_campers = target_rows[
-              target_pos_scores[target_rows, 0] >= 6]
-            num_can_add_bases_multiple_campers = (
-              bases_ids_that_can_take_more_campers.size)
-            
-            if num_can_add_bases_multiple_campers > 0:
-              while num_unassigned_campers > 0:
-                num_added = min(num_unassigned_campers,
-                                num_can_add_bases_multiple_campers)
-                target_rows = np.concatenate([
-                  target_rows, bases_ids_that_can_take_more_campers[
-                    :num_added]])
-                num_unassigned_campers -= num_added
-            else:
-              num_campers_assigned = num_valid_targeted_bases
           
           # First handle the bases where we already have a camper to avoid
           # releasing the pressure temporarily
@@ -5242,8 +4945,8 @@ def update_base_camping_strategy(
             already_camping = np.zeros(num_campers_assigned, dtype=np.bool)
             for i in range(num_campers_assigned):
               considered_row = target_rows[i]
-              base_row = int(target_pos_scores[considered_row, 1])
-              base_col = int(target_pos_scores[considered_row, 2])
+              base_row = target_pos_scores[considered_row, 0]
+              base_col = target_pos_scores[considered_row, 1]
               camp_prev_step = (base_row, base_col) in all_prev_camping_bases
               near_my_zh_ship = ((DISTANCES[base_row, base_col] <= 2) & (
                 halite_ships == 0) & (stacked_ships[0])).sum()
@@ -5255,8 +4958,8 @@ def update_base_camping_strategy(
             target_row = target_rows[target_id]
             # Compute the distance to all my zero halite ships and pick the
             # closest to camp out
-            base_row = int(target_pos_scores[target_row, 1])
-            base_col = int(target_pos_scores[target_row, 2])
+            base_row = int(target_pos_scores[target_row, 0])
+            base_col = int(target_pos_scores[target_row, 1])
             zero_halite_base_distances = DISTANCES[base_row, base_col][
               my_zero_halite_ship_positions]
             best_ship_id = np.argmin(zero_halite_base_distances)
@@ -5292,6 +4995,8 @@ def update_base_camping_strategy(
         # Phase 6: Aggressively circle around the base
         # Phase 7: Keep circling annoyingly around the base but do so in a safe
         # way.
+        # TODO: include campers of phases 6 and 7 in boxing in and base attack
+        # logic.
         for ship_k in camping_ships_targets:
           target_base_row, target_base_col = camping_ships_targets[ship_k]
           target_base_loc_tuple = (target_base_row, target_base_col)
@@ -5323,33 +5028,13 @@ def update_base_camping_strategy(
               camping_phase = 6
             
             if camping_phase in [2, 6, 7]:
-              # Passively select targets around the base in phase 2 and 7.
-              # Set the targets aggressively in phase 6
-              # Avoid my other zero halite ships next to the base
-              target_box = ROW_COL_BOX_MAX_DISTANCE_MASKS[
+              # Passively select targets around the base
+              collect_override_addition = 1e5*ROW_COL_BOX_MAX_DISTANCE_MASKS[
                 target_base_row, target_base_col, 1]
-              collect_override_addition = 1e5*target_box
               collect_override_addition[target_base_row, target_base_col] = (
                 -1e5)
               if obs_halite[row, col] > 0:
                 collect_override_addition[row, col] = -1e5
-
-              # Get the nearby mask of other zero halite ships so that my
-              # ships that camp at the same base stay out of each other's way
-              subtract_mask = np.zeros_like(collect_override_addition)
-              my_zero_halite_target_box_pos = np.where(target_box & (
-                stacked_ships[0]) & (halite_ships == 0) & (
-                  ~my_zero_halite_excluded_from_camping))
-              for my_zero_id in range(my_zero_halite_target_box_pos[0].size):
-                other_row = my_zero_halite_target_box_pos[0][my_zero_id]
-                other_col = my_zero_halite_target_box_pos[1][my_zero_id]
-                if other_row != row or other_col != col:
-                  subtract_mask += 1e4*DISTANCE_MASKS[other_row, other_col]
-              collect_override_addition -= subtract_mask
-                           
-              # TODO: when I block an opponent with two static ships at zero
-              # halite corners: keep them there!
-              
               risk_threshold = 0.0 if camping_phase in [2, 7] else 0.2
               camping_ships_strategy[ship_k] = (
                 risk_threshold, collect_override_addition, zeros_grid_mask,
@@ -5401,8 +5086,7 @@ def update_base_camping_strategy(
   return history
 
 def update_history_start_step(
-    config, history, observation, env_observation, env_obs_ids, env_config,
-    np_rng):
+    config, history, observation, env_observation, env_obs_ids, env_config):
   history_start_time = time.time()
   stacked_ships = np.stack([rbs[2] for rbs in observation[
     'rewards_bases_ships']])
@@ -5434,13 +5118,13 @@ def update_history_start_step(
   # Update the data that keeps track of camping behavior
   history = update_base_camping_strategy(
     config, history, observation, env_observation, stacked_ships, env_obs_ids,
-    env_config, np_rng)
+    env_config)
     
   return history, (time.time()-history_start_time)
 
 def update_history_end_step(
     history, observation, ship_actions, opponent_ships_sensible_actions,
-    ship_plans, player_obs, env_observation, main_base_distances):
+    ship_plans, player_obs, env_observation):
   none_included_ship_actions = {k: (ship_actions[k] if (
     k in ship_actions) else None) for k in player_obs[2]}
   stacked_bases = np.stack([rbs[1] for rbs in observation[
@@ -5450,12 +5134,6 @@ def update_history_end_step(
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
   halite_ships[stacked_ships.sum(0) == 0] = -1e-9
-  if main_base_distances.max() > 0:
-    base_zero_dist_locations = np.where(main_base_distances == 0)
-    my_main_base_location = (base_zero_dist_locations[0][0],
-                             base_zero_dist_locations[1][0])
-  else:
-    my_main_base_location = (-1, -1)
   
   history['prev_step'] = {
     'my_ship_actions': none_included_ship_actions,
@@ -5466,7 +5144,6 @@ def update_history_end_step(
     'stacked_ships': stacked_ships,
     'halite_ships': halite_ships,
     'observation': observation,
-    'my_main_base_location': my_main_base_location,
     }
   return history
 
@@ -5498,8 +5175,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
   
   # Update the history based on what happened during the past observation
   history, history_start_duration = update_history_start_step(
-    config, history, observation, env_observation, env_obs_ids, env_config,
-    np_rng)
+    config, history, observation, env_observation, env_obs_ids, env_config)
   
   # Compute the ship scores for all high level actions
   (ship_scores, opponent_ships_sensible_actions, weighted_base_mask,
@@ -5538,27 +5214,76 @@ def get_config_actions(config, observation, player_obs, env_observation,
   # the next step.
   history = update_history_end_step(
     history, observation, ship_actions, opponent_ships_sensible_actions,
-    ship_plans, player_obs, env_observation, main_base_distances)
+    ship_plans, player_obs, env_observation)
   
   mapped_actions.update(base_actions)
-  halite_spent = player_obs[0]-remaining_budget
   
-  step_details = {
-    'ship_scores': ship_scores,
-    'plan_ship_scores': plan_ship_scores,
-    'ship_plans': ship_plans,
-    'mapped_actions': mapped_actions,
-    'observation': observation,
-    'player_obs': player_obs,
-    'action_overrides': action_overrides,
-    'box_in_duration': box_in_duration,
-    'history_start_duration': history_start_duration,
-    'ship_scores_duration': ship_scores_duration,
-    'ship_plans_duration': ship_plans_duration,
-    'ship_map_duration': ship_map_duration,
+  return mapped_actions, history
+
+def get_base_pos(base_data, grid_size):
+  base_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  for _, v in base_data.items():
+    row, col = row_col_from_square_grid_pos(v, grid_size)
+    base_pos[row, col] = 1
+  
+  return base_pos
+
+def get_ship_halite_pos(ship_data, grid_size):
+  ship_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  ship_halite = np.zeros((grid_size, grid_size), dtype=np.float32)
+  for _, v in ship_data.items():
+    row, col = row_col_from_square_grid_pos(v[0], grid_size)
+    ship_pos[row, col] = 1
+    ship_halite[row, col] = v[1]
+  
+  return ship_pos, ship_halite
+
+def structured_env_obs(env_configuration, env_observation, active_id):
+  grid_size = env_configuration.size
+  halite = np.array(env_observation['halite']).reshape([
+    grid_size, grid_size])
+  
+  num_episode_steps = env_configuration.episodeSteps
+  step = env_observation.step
+  relative_step = step/(num_episode_steps-2)
+  
+  num_agents = len(env_observation.players)
+  rewards_bases_ships = []
+  for i in range(num_agents):
+    player_obs = env_observation.players[i]
+    reward = player_obs[0]
+    base_pos = get_base_pos(player_obs[1], grid_size)
+    ship_pos, ship_halite = get_ship_halite_pos(player_obs[2], grid_size)
+    rewards_bases_ships.append((reward, base_pos, ship_pos, ship_halite))
+    
+  # Move the agent's rewards_bases_ships to the front of the list
+  agent_vals = rewards_bases_ships.pop(active_id)
+  rewards_bases_ships = [agent_vals] + rewards_bases_ships
+  
+  return {
+    'halite': halite,
+    'relative_step': relative_step,
+    'rewards_bases_ships': rewards_bases_ships,
+    'step': step,
     }
+
+
+###############################################################################
+
+HISTORY = {}
+def my_agent(observation, env_config, **kwargs):
+  global HISTORY
+  rng_action_seed = kwargs.get('rng_action_seed', 0)
+  active_id = observation.player
+  current_observation = structured_env_obs(env_config, observation, active_id)
+  player_obs = observation.players[active_id]
   
-  # if observation['step'] == 265:
-  #   import pdb; pdb.set_trace()
-  
-  return mapped_actions, history, halite_spent, step_details
+  mapped_actions, HISTORY = get_config_actions(
+    CONFIG, current_observation, player_obs, observation, env_config, HISTORY,
+    rng_action_seed)
+     
+  if LOCAL_MODE:
+    # This is to allow for debugging of the history outside of the agent
+    return mapped_actions, copy.deepcopy(HISTORY)
+  else:
+    return mapped_actions
