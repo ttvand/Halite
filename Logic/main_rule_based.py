@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 1 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = {
@@ -136,7 +136,7 @@ config = {
     
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.5,
-    'max_ships': 15,
+    'max_ships': 30,
     'max_collect_ships_hunting_season': 0,
     'max_spawns_per_step': 1,
     
