@@ -189,7 +189,7 @@ def update_terminal_halite_scores(num_agents, halite_scores, episode_step,
   return halite_scores
 
 def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
-                         prev_observation):
+                         prev_observation, verbose_id=-1):
   num_players = len(current_players)
   num_lost_ships = np.zeros(num_players)
   
@@ -225,12 +225,16 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
                 # Don't count self collisions
                 # if i == 0 or prev_observation['relative_step']:
                 #   import pdb; pdb.set_trace()
+                if i == verbose_id:
+                  print("Lost ship at step", prev_observation['step']+1)
                 num_lost_ships[i] += 1
           elif prev_actions[ship_k] == "CONVERT" and (
               prev_observation['relative_step'] >= 0.025) and (
                 prev_observation['relative_step'] <= 0.975):
             # The ship most likely got boxed in and was forced to convert. 
             # Note that this also counts lost ships due to losing the base.
+            if i == verbose_id:
+              print("Lost ship at step", prev_observation['step']+1)
             num_lost_ships[i] += 1
       
   return num_lost_ships
@@ -341,7 +345,7 @@ def collect_experience_single_game(
     
     num_lost_ships[episode_step] = get_lost_ships_count(
       player_mapped_actions, players, env.state[0].observation.players,
-      current_observation)
+      current_observation, verbose_id=rule_actions_id)
     
     episode_step += 1
     
