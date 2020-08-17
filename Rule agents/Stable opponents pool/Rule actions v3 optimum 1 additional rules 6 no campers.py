@@ -4618,7 +4618,7 @@ def update_zero_halite_ship_behavior(
               if num_considered_threats == 1:
                 history['raw_zero_halite_move_data'][player_id].append(
                   considered_threat_data[0])
-              else:
+              elif num_considered_threats > 0:
                 threat_data = np.array(considered_threat_data)
                 min_distance = threat_data[:, 0].min()
                 for row_id in range(num_considered_threats):

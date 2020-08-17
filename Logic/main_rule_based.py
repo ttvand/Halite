@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 1 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = {
@@ -93,7 +93,7 @@ config = {
   #   'influence_weights_exponent': ((3.0, 9.0), "float", 1),
   #   'escape_influence_prob_divisor': ((1.0, 5.0), "float", 1),
   #   'rescue_ships_in_trouble': ((0, 1), "int", 0),
-  #   'max_spawn_relative_step_divisor': ((100.0, 100.001), "float", 1),
+  #   'max_spawn_relative_step_divisor': ((5.0, 20.0), "float", 1),
   #   'no_spawn_near_base_ship_limit': ((2, 10), "int", 2),
   #   }
   
@@ -155,7 +155,7 @@ config = {
     'influence_weights_exponent': 8.0,
     'escape_influence_prob_divisor': 3.0,
     'rescue_ships_in_trouble': 1,
-    'max_spawn_relative_step_divisor': 100.0,
+    'max_spawn_relative_step_divisor': 5.0,
     'no_spawn_near_base_ship_limit': 100,
     }
   }

@@ -15,7 +15,9 @@ ExperienceGame = recordtype('ExperienceGame', [
   'initial_halite_setup',
   'initial_agents_setup',
   'halite_scores',
+  'all_first_durations',
   'action_delays',
+  'first_get_actions_durations',
   'first_box_in_durations',
   'first_history_durations',
   'first_ship_scores_durations',
@@ -260,6 +262,7 @@ def collect_experience_single_game(
   max_episode_steps = env.configuration.episodeSteps
   halite_scores = np.full((max_episode_steps, num_agents), np.nan)
   action_delays = np.full((max_episode_steps-1, num_agents), np.nan)
+  first_get_actions_durations = np.full(max_episode_steps-1, np.nan)
   first_box_in_durations = np.full(max_episode_steps-1, np.nan)
   first_history_durations = np.full(max_episode_steps-1, np.nan)
   first_ship_scores_durations = np.full(max_episode_steps-1, np.nan)
@@ -304,6 +307,8 @@ def collect_experience_single_game(
           player_obs[2])
         if active_id == rule_actions_id:
           first_agent_step_details.append(step_details)
+          first_get_actions_durations[episode_step] = step_details[
+            'get_actions_duration']
           first_box_in_durations[episode_step] = step_details[
             'box_in_duration']
           first_history_durations[episode_step] = step_details[
@@ -366,6 +371,18 @@ def collect_experience_single_game(
   else:
     game_recording = None
   
+  # Combine the different first player durations into a matrix for better
+  # analysis
+  all_first_durations = np.stack([
+    action_delays[:, rule_actions_id],
+    first_get_actions_durations,
+    first_box_in_durations,
+    first_history_durations,
+    first_ship_scores_durations,
+    first_ship_plans_durations,
+    first_ship_map_durations,
+    ], -1)
+  
   # Store the game data
   this_game_data = ExperienceGame(
         game_id,
@@ -374,7 +391,9 @@ def collect_experience_single_game(
         initial_halite_setup,
         initial_agents_setup,
         halite_scores,
+        all_first_durations,
         action_delays,
+        first_get_actions_durations,
         first_box_in_durations,
         first_history_durations,
         first_ship_scores_durations,
