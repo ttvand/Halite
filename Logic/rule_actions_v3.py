@@ -2073,8 +2073,9 @@ def update_scores_pack_hunt(
   available_pack_hunt_ships = np.copy(stacked_ships[0])
   grid_size = available_pack_hunt_ships.shape[0]
   hunting_season_started = history['hunting_season_started']
-  prev_collect_ships = history['hunting_season_collect_ships']
-  max_collect_ships_hunting_season = config['max_collect_ships_hunting_season']
+  prev_standard_ships = history['hunting_season_standard_ships']
+  max_standard_ships_hunting_season = config[
+    'max_standard_ships_hunting_season']
   prev_step_opponent_ship_moves = history['prev_step_opponent_ship_moves']
   num_players = stacked_ships.shape[0]
   ship_pos_to_key = {}
@@ -2106,6 +2107,7 @@ def update_scores_pack_hunt(
   # In this group:
   #  - Opponent base camping
   #  - Attack opponent base campers
+  #  - Ships that are are on a rescue mission (rescuer and rescued)
   #  - Base defense emergency ships
   #  - Boxing in other ships
   available_pack_hunt_ships &= (~not_available_due_to_camping)
@@ -2113,32 +2115,32 @@ def update_scores_pack_hunt(
   available_pack_hunt_ships &= (~my_defend_base_ship_positions)
   available_pack_hunt_ships &= (~boxing_in_mission)
   
-  # Of the remaining list: identify 'max_collect_ships_hunting_season' ships
-  # that are available to gather halite. Preferably select ships that were
-  # also gathering in the previous step and have halite on board.
-  # Only change the gather ships if one of my gatherers was destroyed (they may
-  # be doing one of the 4 actions above that exclude them from the pack hunt
-  # either way). Assign a new gatherer if my gatherer is assigned to the
-  # base camping attack or defense (These ships tend to be indefinitely
-  # unavailable)
+  # Of the remaining list: identify 'max_standard_ships_hunting_season' ships
+  # that are available to gather halite/attack bases.
+  # Preferably select ships that were also selected for these modes in the
+  # previous step and have halite on board.
+  # Only change the gather/attack ships if one of my gatherers was destroyed
+  # Assign a new gatherer if my gatherer is assigned to the base camping
+  # attack or defense (These ships tend to be indefinitely unavailable), or if
+  # the ship was destroyed.
   # Prefer non-zero halite ships for the initial gathering ships.
   my_ship_pos_to_k = {v[0]: k for k, v in player_obs[2].items()}
   available_positions = np.where(available_pack_hunt_ships)
   num_available_ships = available_pack_hunt_ships.sum()
-  collect_ships = []
+  standard_ships = []
   if num_available_ships > 0:
-    best_collect_scores = np.zeros(num_available_ships)
+    best_standard_scores = np.zeros(num_available_ships)
     pos_keys = []
     for i in range(num_available_ships):
       row = available_positions[0][i]
       col = available_positions[1][i]
       pos_key = my_ship_pos_to_k[row*grid_size+col]
-      best_collect_scores[i] = all_ship_scores[pos_key][0].max() - 1e6*(
+      best_standard_scores[i] = all_ship_scores[pos_key][0].max() - 1e6*(
         halite_ships[row, col] == 0)
       pos_keys.append(pos_key)
     if hunting_season_started:
       already_included_ids = np.zeros(num_available_ships, dtype=np.bool)
-      for ship_k in prev_collect_ships:
+      for ship_k in prev_standard_ships:
         if ship_k in player_obs[2]:
           # The ship still exists
           row, col = row_col_from_square_grid_pos(
@@ -2147,43 +2149,44 @@ def update_scores_pack_hunt(
               row, col] or on_rescue_mission[row, col]:
             # We can use the ship for collecting soon (now it is rescuing or
             # boxing in or defending the base)
-            collect_ships.append(ship_k)
+            standard_ships.append(ship_k)
           elif ship_k in player_obs[2]:
             # The ship is available now. Flag it for exclusion so it doesn't
             # get added twice
-            collect_ships.append(ship_k)
+            standard_ships.append(ship_k)
             match_id = np.where((available_positions[0] == row) & (
               available_positions[1] == col))[0][0]
             already_included_ids[match_id] = True
           else:
             # The ship is now used for base camping - exclude it from the
-            # collect ships group
+            # standard ships group
             import pdb; pdb.set_trace()
             pass
             
-      best_collect_scores = best_collect_scores[~already_included_ids]
+      best_standard_scores = best_standard_scores[~already_included_ids]
       available_positions = (available_positions[0][~already_included_ids],
                              available_positions[1][~already_included_ids])
       pos_keys = np.array(pos_keys)[~already_included_ids].tolist()
-      num_to_assign = max_collect_ships_hunting_season - len(collect_ships)
-      num_available_ships = best_collect_scores.size
+      num_to_assign = max_standard_ships_hunting_season - len(standard_ships)
+      num_available_ships = best_standard_scores.size
     else:
-      num_to_assign = max_collect_ships_hunting_season
+      num_to_assign = max_standard_ships_hunting_season
       
     # Assign the remaining collect ships
     # Assign the available ships with the highest collect score for collecting
     # (preferably non zero halite ships)
     num_to_assign = min(num_to_assign, num_available_ships)
-    best_collect_ids = np.argsort(-best_collect_scores)[:num_to_assign]
-    for collect_id in best_collect_ids:
-      collect_row = available_positions[0][collect_id]
-      collect_col = available_positions[1][collect_id]
-      collect_key = pos_keys[collect_id]
-      assert not collect_key in collect_ships
-      collect_ships.append(collect_key)
-      available_pack_hunt_ships[collect_row, collect_col] = 0
+    best_standard_ids = np.argsort(-best_standard_scores)[:num_to_assign]
+    for standard_id in best_standard_ids:
+      standard_row = available_positions[0][standard_id]
+      standard_col = available_positions[1][standard_id]
+      standard_key = pos_keys[standard_id]
+      assert not standard_key in standard_ships
+      standard_ships.append(standard_key)
+      available_pack_hunt_ships[standard_row, standard_col] = 0
     
-  history['hunting_season_collect_ships'] = collect_ships
+  print(standard_ships)
+  history['hunting_season_standard_ships'] = standard_ships
   history['hunting_season_started'] = True
   
   # The remaining ships are considered for pack hunting. Send the ones with
@@ -2200,8 +2203,8 @@ def update_scores_pack_hunt(
     if halite_ships[row, col] > 0:
       available_pack_hunt_ships[row, col] = 0
       ship_k = my_ship_pos_to_k[row*grid_size+col]
-      # Let the ship collect at will before joining the pack hunt after 
-      # touching base
+      # Let the ship collect at will (but prefer to go to a base sooner rather
+      # than later) before joining the pack hunt after touching base
       for j in [2, 3]:
         all_ship_scores[ship_k][j][:] = -1e6
         
@@ -6861,7 +6864,7 @@ def update_history_start_step(
   
   if observation['step'] == 0:
     history['hunting_season_started'] = False
-    history['hunting_season_collect_ships'] = []
+    history['hunting_season_standard_ships'] = []
     history['prev_step_boxing_in_ships'] = []
     history['prev_step_hoarded_one_step_opponent_keys'] = []
     history['my_prev_step_base_attacker_ships'] = []
