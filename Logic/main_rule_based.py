@@ -161,7 +161,7 @@ config = {
     'escape_influence_prob_divisor': 3.0,
     'rescue_ships_in_trouble': 1,
     
-    'max_spawn_relative_step_divisor': 5.0,
+    'max_spawn_relative_step_divisor': 15.0,
     'no_spawn_near_base_ship_limit': 100,
     }
   }

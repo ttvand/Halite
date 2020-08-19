@@ -2168,14 +2168,19 @@ def update_scores_pack_hunt(
                              available_positions[1][~already_included_ids])
       pos_keys = np.array(pos_keys)[~already_included_ids].tolist()
       num_to_assign = max_standard_ships_hunting_season - len(standard_ships)
+      num_to_assign = max(0, min(num_to_assign, num_available_ships))
+      num_to_assign_phase_1 = max(0, num_to_assign - config[
+        'max_standard_ships_decided_end_pack_hunting'])
+      num_to_assign_phase_2 = num_to_assign_phase_1-num_to_assign
       num_available_ships = best_standard_scores.size
     else:
       num_to_assign = max_standard_ships_hunting_season
+      num_to_assign_phase_1 = min(num_to_assign, num_available_ships)
+      num_to_assign_phase_2 = 0
       
     # Assign the remaining collect ships
     # Assign the available ships with the highest collect score for collecting
     # (preferably non zero halite ships)
-    num_to_assign = min(num_to_assign, num_available_ships)
     best_standard_ids = np.argsort(-best_standard_scores)[:num_to_assign]
     for standard_id in best_standard_ids:
       standard_row = available_positions[0][standard_id]
@@ -2183,9 +2188,14 @@ def update_scores_pack_hunt(
       standard_key = pos_keys[standard_id]
       assert not standard_key in standard_ships
       standard_ships.append(standard_key)
+      
+    # Mark the standard ships as unavailable for pack hunting
+    for standard_key in standard_ships:
+      standard_row, standard_col = row_col_from_square_grid_pos(
+        player_obs[2][standard_key][0], grid_size)
       available_pack_hunt_ships[standard_row, standard_col] = 0
     
-  print(standard_ships)
+  print(standard_ships, available_pack_hunt_ships.sum())
   history['hunting_season_standard_ships'] = standard_ships
   history['hunting_season_started'] = True
   
@@ -2779,6 +2789,10 @@ def update_scores_pack_hunt(
           # import pdb; pdb.set_trace()
           hunting_ships_available[attacker_id] = 0
       
+    # Assign the remaining standard ships
+    if num_to_assign_phase_2 > 0 and hunting_ships_available.sum() > 0:
+      import pdb; pdb.set_trace()
+      available_hunting_ids = np.where(hunting_ships_available)[0]
       
     # Coordinate the remaining hunting actions based on the potential target
     # distances.
