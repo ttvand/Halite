@@ -195,6 +195,16 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
   
   prev_bases = np.stack([rbs[1] for rbs in prev_observation[
     'rewards_bases_ships']]).sum(0) > 0
+  grid_size = prev_bases.shape[0]
+  
+  new_convert_positions = np.zeros_like(prev_bases)
+  for i in range(num_players):
+    prev_player = prev_players[i]
+    prev_actions = player_mapped_actions[i]
+    for ship_k in prev_actions:
+      if prev_actions[ship_k] == "CONVERT":
+        new_convert_positions[utils.row_col_from_square_grid_pos(
+          prev_player[2][ship_k][0], grid_size)] = 1
   
   for i in range(num_players):
     prev_player = prev_players[i]
@@ -202,7 +212,6 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
     prev_actions = player_mapped_actions[i]
     was_alive = len(prev_player[2]) > 0 or (
       len(prev_player[1]) > 0 and prev_player[0] >= 500)
-    grid_size = prev_bases.shape[0]
     
     if was_alive:
       # Loop over all ships and figure out if a ship was lost unintentionally
@@ -222,11 +231,11 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
               if (not move_row*grid_size + move_col in [
                   s[0] for s in current_player[2].values()]) and (
                     prev_observation['relative_step'] < 0.975):
-                # Don't count self collisions
-                # if i == 0 or prev_observation['relative_step']:
-                #   import pdb; pdb.set_trace()
-                if i == verbose_id:
-                  print("Lost ship at step", prev_observation['step']+1)
+                # Don't count self collisions or collisions with a new base
+                if not new_convert_positions[move_row, move_col]:
+                  if i == verbose_id:
+                    # import pdb; pdb.set_trace()
+                    print("Lost ship at step", prev_observation['step']+1)
                 num_lost_ships[i] += 1
           elif prev_actions[ship_k] == "CONVERT" and (
               prev_observation['relative_step'] >= 0.025) and (
@@ -345,7 +354,7 @@ def collect_experience_single_game(
     
     num_lost_ships[episode_step] = get_lost_ships_count(
       player_mapped_actions, players, env.state[0].observation.players,
-      current_observation, verbose_id=rule_actions_id)
+      current_observation, verbose_id=rule_actions_id+0.5)
     
     episode_step += 1
     
