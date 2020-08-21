@@ -33,8 +33,8 @@ config = {
   'num_agents_per_game': 4,
   'pool_name': 'Rule based with evolution VIII',
 
-  # # You need to delete the earlier configs or delete an entire agent pool after
-  # # making changes to the search ranges
+  # You need to delete the earlier configs or delete an entire agent pool after
+  # making changes to the search ranges
   'initial_config_ranges': {
     'halite_config_setting_divisor': ((1.0, 1.0+1e-10), "float", 0),
     'collect_smoothed_multiplier': ((0.0, 0.1), "float", 0),
@@ -322,7 +322,7 @@ def main_rule_utils(config, main_loop_seed=MAIN_LOOP_INITIAL_SEED):
       rule_utils.update_learning_progress(config['pool_name'], update_config)
 
       config_override_agents = (
-        fixed_opponents_experience[-1].config_game_agents)
+        fixed_opponents_experience[0].config_game_agents)
       # import pdb; pdb.set_trace()
       rule_utils.record_videos(
         rules_config_path, config['num_agents_per_game'],
