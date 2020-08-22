@@ -10,9 +10,9 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 38 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 50
+NUM_GAMES = 7
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -35,135 +35,135 @@ config = {
 
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
-  'initial_config_ranges': {
-    'halite_config_setting_divisor': ((1.0, 1.0+1e-10), "float", 0),
-    'collect_smoothed_multiplier': ((0.0, 0.1), "float", 0),
-    'collect_actual_multiplier': ((2.0, 8.0), "float", 0),
-    'collect_less_halite_ships_multiplier_base': ((0.4, 0.7), "float", 0),
-    'collect_base_nearest_distance_exponent': ((0.0, 0.3), "float", 0),
-    
-    'return_base_multiplier': ((6.0, 12.0), "float", 0),
-    'return_base_less_halite_ships_multiplier_base': ((0.8, 1.0), "float", 0),
-    'early_game_return_base_additional_multiplier': ((0.0, 0.5), "float", 0),
-    'early_game_return_boost_step': ((10, 100), "int", 0),
-    'establish_base_smoothed_multiplier': ((0.0, 0.1), "float", 0),
-  
-    'establish_first_base_smoothed_multiplier_correction': ((1.0, 5.0), "float", 0),
-    'first_base_no_4_way_camping_spot_bonus': ((100.0, 1000.0), "float", 0),
-    'max_camper_ship_budget': ((0, 4), "int", 0),
-    'establish_base_deposit_multiplier': ((0.8, 1.0), "float", 0),
-    'establish_base_less_halite_ships_multiplier_base': ((0.9, 1.0), "float", 0),
-  
-    'max_attackers_per_base': ((0, 5), "int", -1),
-    'attack_base_multiplier': ((0.0, 500.0), "float", 0),
-    'attack_base_less_halite_ships_multiplier_base': ((0.8, 1.0), "float", 0),
-    'attack_base_halite_sum_multiplier': ((1.0, 3.0), "float", 0),
-    'attack_base_run_enemy_multiplier': ((0.1, 2.0), "float", 0),
-  
-    'attack_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-    'collect_run_enemy_multiplier': ((5.0, 15.0), "float", 0),
-    'return_base_run_enemy_multiplier': ((1.0, 3.0), "float", 0),
-    'establish_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
-    'collect_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-  
-    'return_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-    'establish_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-    'two_step_avoid_boxed_enemy_multiplier_base': ((0.7, 0.9), "float", 0),
-    'n_step_avoid_boxed_enemy_multiplier_base': ((0.3, 0.9), "float", 0),
-    'min_consecutive_chase_extrapolate': ((4, 10), "int", 1),
-  
-    'chase_return_base_exponential_bonus': ((1.0, 2.0), "float", 0),
-    'ignore_catch_prob': ((0.3, 0.5), "float", 0),
-    'max_initial_ships': ((30, 70), "int", 1),
-    'max_final_ships': ((5, 15), "int", 1),
-    'max_standard_ships_hunting_season': ((2, 15), "int", 1),
-  
-    'max_standard_ships_decided_end_pack_hunting': ((0, 5), "int", 1),
-    'max_spawns_per_step': ((1, 3), "int", 1),
-    'nearby_ship_halite_spawn_constant': ((1.0, 5.0), "float", 0),
-    'nearby_halite_spawn_constant': ((2.0, 10.0), "float", 0),
-    'remaining_budget_spawn_constant': ((0.2, 0.20001), "float", 0),
-  
-    'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
-    'boxed_in_halite_convert_divisor': ((0.5, 2.0), "float", 1),
-    'n_step_avoid_min_die_prob_cutoff': ((0.0, 0.2), "float", 0),
-    'n_step_avoid_window_size': ((5, 9), "int", 3),
-    'influence_map_base_weight': ((1.0, 3.0), "float", 0),
-  
-    'influence_map_min_ship_weight': ((0.0, 0.5), "float", 0),
-    'influence_weights_additional_multiplier': ((0.0, 10.0), "float", 0),
-    'influence_weights_exponent': ((3.0, 9.0), "float", 1),
-    'escape_influence_prob_divisor': ((1.0, 5.0), "float", 1),
-    'rescue_ships_in_trouble': ((0, 1), "int", 0),
-  
-    'max_spawn_relative_step_divisor': ((5.0, 25.0), "float", 1),
-    'no_spawn_near_base_ship_limit': ((100, 101), "int", 2),
-    }
-  
   # 'initial_config_ranges': {
-  #   'halite_config_setting_divisor': 1.0,
-  #   'collect_smoothed_multiplier': 0.02,
-  #   'collect_actual_multiplier': 5.0,
-  #   'collect_less_halite_ships_multiplier_base': 0.55,
-  #   'collect_base_nearest_distance_exponent': 0.1,
+  #   'halite_config_setting_divisor': ((1.0, 1.0+1e-10), "float", 0),
+  #   'collect_smoothed_multiplier': ((0.0, 0.1), "float", 0),
+  #   'collect_actual_multiplier': ((2.0, 8.0), "float", 0),
+  #   'collect_less_halite_ships_multiplier_base': ((0.4, 0.7), "float", 0),
+  #   'collect_base_nearest_distance_exponent': ((0.0, 0.3), "float", 0),
+    
+  #   'return_base_multiplier': ((6.0, 12.0), "float", 0),
+  #   'return_base_less_halite_ships_multiplier_base': ((0.8, 1.0), "float", 0),
+  #   'early_game_return_base_additional_multiplier': ((0.0, 0.5), "float", 0),
+  #   'early_game_return_boost_step': ((10, 100), "int", 0),
+  #   'establish_base_smoothed_multiplier': ((0.0, 0.1), "float", 0),
   
-  #   'return_base_multiplier': 8.0,
-  #   'return_base_less_halite_ships_multiplier_base': 0.85,
-  #   'early_game_return_base_additional_multiplier': 0.1,
-  #   'early_game_return_boost_step': 50,
-  #   'establish_base_smoothed_multiplier': 0.0,
-    
-  #   'establish_first_base_smoothed_multiplier_correction': 2.5,
-  #   'first_base_no_4_way_camping_spot_bonus': 300,
-  #   'max_camper_ship_budget': 4,
-  #   'establish_base_deposit_multiplier': 1.0,
-  #   'establish_base_less_halite_ships_multiplier_base': 1.0,
-    
-  #   'max_attackers_per_base': 3*1,
-  #   'attack_base_multiplier': 500.0,
-  #   'attack_base_less_halite_ships_multiplier_base': 0.9,
-  #   'attack_base_halite_sum_multiplier': 2.0, #*0, # *0 makes it very aggressive
-  #   'attack_base_run_enemy_multiplier': 1.0,
-    
-  #   'attack_base_catch_enemy_multiplier': 1.0,
-  #   'collect_run_enemy_multiplier': 10.0,
-  #   'return_base_run_enemy_multiplier': 2.0,
-  #   'establish_base_run_enemy_multiplier': 2.5,
-  #   'collect_catch_enemy_multiplier': 1.0,
-    
-  #   'return_base_catch_enemy_multiplier': 1.0,
-  #   'establish_base_catch_enemy_multiplier': 0.5,
-  #   'two_step_avoid_boxed_enemy_multiplier_base': 0.8,
-  #   'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
-  #   'min_consecutive_chase_extrapolate': 5,
-    
-  #   'chase_return_base_exponential_bonus': 2.0,
-  #   'ignore_catch_prob': 0.5,
-  #   'max_initial_ships': 50,
-  #   'max_final_ships': 10,
-  #   'max_standard_ships_hunting_season': 10,
-    
-  #   'max_standard_ships_decided_end_pack_hunting': 2,
-  #   'max_spawns_per_step': 1,
-  #   'nearby_ship_halite_spawn_constant': 3.0,
-  #   'nearby_halite_spawn_constant': 5.0,
-  #   'remaining_budget_spawn_constant': 0.2,
-    
-  #   'spawn_score_threshold': 75.0,
-  #   'boxed_in_halite_convert_divisor': 1.0,
-  #   'n_step_avoid_min_die_prob_cutoff': 0.1,
-  #   'n_step_avoid_window_size': 7,
-  #   'influence_map_base_weight': 1.5,
-    
-  #   'influence_map_min_ship_weight': 0.0,
-  #   'influence_weights_additional_multiplier': 4.0,
-  #   'influence_weights_exponent': 8.0,
-  #   'escape_influence_prob_divisor': 3.0,
-  #   'rescue_ships_in_trouble': 1,
-    
-  #   'max_spawn_relative_step_divisor': 15.0,
-  #   'no_spawn_near_base_ship_limit': 100,
+  #   'establish_first_base_smoothed_multiplier_correction': ((1.0, 4.0), "float", 0),
+  #   'first_base_no_4_way_camping_spot_bonus': ((100.0, 1000.0), "float", 0),
+  #   'max_camper_ship_budget': ((0, 4), "int", 0),
+  #   'establish_base_deposit_multiplier': ((0.8, 1.0), "float", 0),
+  #   'establish_base_less_halite_ships_multiplier_base': ((0.9, 1.0), "float", 0),
+  
+  #   'max_attackers_per_base': ((0, 5), "int", -1),
+  #   'attack_base_multiplier': ((0.0, 500.0), "float", 0),
+  #   'attack_base_less_halite_ships_multiplier_base': ((0.8, 1.0), "float", 0),
+  #   'attack_base_halite_sum_multiplier': ((1.0, 3.0), "float", 0),
+  #   'attack_base_run_enemy_multiplier': ((0.1, 2.0), "float", 0),
+  
+  #   'attack_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  #   'collect_run_enemy_multiplier': ((5.0, 15.0), "float", 0),
+  #   'return_base_run_enemy_multiplier': ((1.5, 4.0), "float", 0),
+  #   'establish_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
+  #   'collect_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  
+  #   'return_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  #   'establish_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
+  #   'two_step_avoid_boxed_enemy_multiplier_base': ((0.6, 0.9), "float", 0),
+  #   'n_step_avoid_boxed_enemy_multiplier_base': ((0.3, 0.9), "float", 0),
+  #   'min_consecutive_chase_extrapolate': ((4, 10), "int", 1),
+  
+  #   'chase_return_base_exponential_bonus': ((1.0, 2.0), "float", 0),
+  #   'ignore_catch_prob': ((0.1, 0.5), "float", 0),
+  #   'max_initial_ships': ((30, 70), "int", 1),
+  #   'max_final_ships': ((5, 15), "int", 1),
+  #   'max_standard_ships_hunting_season': ((2, 15), "int", 1),
+  
+  #   'max_standard_ships_decided_end_pack_hunting': ((0, 5), "int", 1),
+  #   'max_spawns_per_step': ((1, 3), "int", 1),
+  #   'nearby_ship_halite_spawn_constant': ((1.0, 5.0), "float", 0),
+  #   'nearby_halite_spawn_constant': ((2.0, 10.0), "float", 0),
+  #   'remaining_budget_spawn_constant': ((0.2, 0.20001), "float", 0),
+  
+  #   'spawn_score_threshold': ((0.0, 100.0), "float", -float("inf")),
+  #   'boxed_in_halite_convert_divisor': ((0.5, 2.0), "float", 1),
+  #   'n_step_avoid_min_die_prob_cutoff': ((0.0, 0.2), "float", 0),
+  #   'n_step_avoid_window_size': ((5, 9), "int", 3),
+  #   'influence_map_base_weight': ((1.0, 3.0), "float", 0),
+  
+  #   'influence_map_min_ship_weight': ((0.0, 0.5), "float", 0),
+  #   'influence_weights_additional_multiplier': ((0.0, 10.0), "float", 0),
+  #   'influence_weights_exponent': ((3.0, 9.0), "float", 1),
+  #   'escape_influence_prob_divisor': ((1.0, 5.0), "float", 1),
+  #   'rescue_ships_in_trouble': ((0, 1), "int", 0),
+  
+  #   'max_spawn_relative_step_divisor': ((5.0, 25.0), "float", 1),
+  #   'no_spawn_near_base_ship_limit': ((100, 101), "int", 2),
   #   }
+  
+  'initial_config_ranges': {
+    'halite_config_setting_divisor': 1.0,
+    'collect_smoothed_multiplier': 0.02,
+    'collect_actual_multiplier': 5.0,
+    'collect_less_halite_ships_multiplier_base': 0.55,
+    'collect_base_nearest_distance_exponent': 0.1,
+  
+    'return_base_multiplier': 8.0,
+    'return_base_less_halite_ships_multiplier_base': 0.85,
+    'early_game_return_base_additional_multiplier': 0.1,
+    'early_game_return_boost_step': 50,
+    'establish_base_smoothed_multiplier': 0.0,
+    
+    'establish_first_base_smoothed_multiplier_correction': 2.0,
+    'first_base_no_4_way_camping_spot_bonus': 300,
+    'max_camper_ship_budget': 4,
+    'establish_base_deposit_multiplier': 1.0,
+    'establish_base_less_halite_ships_multiplier_base': 1.0,
+    
+    'max_attackers_per_base': 3*1,
+    'attack_base_multiplier': 500.0,
+    'attack_base_less_halite_ships_multiplier_base': 0.9,
+    'attack_base_halite_sum_multiplier': 2.0, #*0, # *0 makes it very aggressive
+    'attack_base_run_enemy_multiplier': 1.0,
+    
+    'attack_base_catch_enemy_multiplier': 1.0,
+    'collect_run_enemy_multiplier': 10.0,
+    'return_base_run_enemy_multiplier': 2.5,
+    'establish_base_run_enemy_multiplier': 2.5,
+    'collect_catch_enemy_multiplier': 1.0,
+    
+    'return_base_catch_enemy_multiplier': 1.0,
+    'establish_base_catch_enemy_multiplier': 0.5,
+    'two_step_avoid_boxed_enemy_multiplier_base': 0.7,
+    'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
+    'min_consecutive_chase_extrapolate': 5,
+    
+    'chase_return_base_exponential_bonus': 2.0,
+    'ignore_catch_prob': 0.3,
+    'max_initial_ships': 50,
+    'max_final_ships': 10,
+    'max_standard_ships_hunting_season': 10,
+    
+    'max_standard_ships_decided_end_pack_hunting': 2,
+    'max_spawns_per_step': 1,
+    'nearby_ship_halite_spawn_constant': 3.0,
+    'nearby_halite_spawn_constant': 5.0,
+    'remaining_budget_spawn_constant': 0.2,
+    
+    'spawn_score_threshold': 75.0,
+    'boxed_in_halite_convert_divisor': 1.0,
+    'n_step_avoid_min_die_prob_cutoff': 0.05,
+    'n_step_avoid_window_size': 8,
+    'influence_map_base_weight': 1.5,
+    
+    'influence_map_min_ship_weight': 0.0,
+    'influence_weights_additional_multiplier': 4.0,
+    'influence_weights_exponent': 8.0,
+    'escape_influence_prob_divisor': 3.0,
+    'rescue_ships_in_trouble': 1,
+    
+    'max_spawn_relative_step_divisor': 15.0,
+    'no_spawn_near_base_ship_limit': 100,
+    }
   }
 CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"
 
