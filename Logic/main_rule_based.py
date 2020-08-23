@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 3 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 4 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 7
 config = {
