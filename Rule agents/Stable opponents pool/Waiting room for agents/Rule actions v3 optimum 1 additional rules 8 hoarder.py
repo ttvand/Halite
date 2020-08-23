@@ -3861,7 +3861,7 @@ def update_scores_rescue_missions(
     
     # if observation['step'] == 36:
     #   import pdb; pdb.set_trace()
-    print("Boxed in ships", observation['step'], my_boxed_pos)
+    # print("Boxed in ships", observation['step'], my_boxed_pos)
   
   # Consider chased or boxed in ships
   chased_ships = list(history['chase_counter'][0].keys())
