@@ -23,7 +23,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': True,
+  'use_multiprocessing': False,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,

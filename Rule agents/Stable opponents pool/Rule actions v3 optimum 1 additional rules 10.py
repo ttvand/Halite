@@ -7045,6 +7045,7 @@ def update_base_camping_strategy(
       history['camping_phase_opponents'])
     prev_opponent_bases = history['prev_step']['stacked_bases'][1:].sum(0) > 0
     my_zero_lost_ships_opponents = history['my_zero_lost_ships_opponents']
+    total_opponent_bases_count = stacked_bases.sum((1, 2))[1:]
     if remaining_camping_budget >= 1 or (number_already_camping > 0):
       # Aim higher than the current ranking: being behind is only counted half
       # as much as being ahead to determine who to attack
@@ -7065,6 +7066,10 @@ def update_base_camping_strategy(
         argmax_id = np.argmax(opponent_scores_scaled)
         opponent_scores_scaled[argmax_id] = max(
           opponent_scores_scaled[argmax_id], 1e-9)
+        
+      # Don't camp at an opponent that has more bases than my camping budget
+      opponent_scores_scaled[
+        total_opponent_bases_count > remaining_camping_budget] = -100
           
       if num_all_opponent_bases > 0:
         # Compute target scores for each of the opponent bases

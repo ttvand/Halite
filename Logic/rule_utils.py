@@ -94,6 +94,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Rule actions v3 optimum 1 additional rules 8 hoarder': 1,
     'Rule actions v3 optimum 1 additional rules 8 collector': 1,
     'Rule actions v3 optimum 1 additional rules 9': 1,
+    'Rule actions v3 optimum 1 additional rules 10': 1,
     'Base attacker': 0.1,
     'Runner': 0.1,
     # 'Greedy - many spawns and conversions': 1,
