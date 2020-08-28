@@ -815,7 +815,12 @@ def store_config_on_first_run(config):
 # Allow dot access for dict
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
-    __getattr__ = dict.get
+    def __getattr__(self, item):
+        try:
+            return self[item]
+        except KeyError as e:
+            raise AttributeError from e
+            
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
     

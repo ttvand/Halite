@@ -1,5 +1,5 @@
 from kaggle_environments import make as make_environment
-from kaggle_environments import utils as environment_utils
+from kaggle_environments import agent as kaggle_agent
 from pathlib import Path
 from recordtype import recordtype
 import multiprocessing as mp
@@ -258,7 +258,7 @@ def collect_experience_single_game(
   utils.set_seed(env_random_seed)
   
   game_agents = [a if isinstance(a, dict) else (
-    environment_utils.get_last_callable(a)) for a in game_agents]
+    kaggle_agent.get_last_callable(a)) for a in game_agents]
   config_game_agents = [a if isinstance(a, dict) else "text_agent" for a in (
     game_agents)]
   

@@ -2,6 +2,7 @@
 import json
 from kaggle_environments import make as make_environment
 from kaggle_environments import utils as environment_utils
+from kaggle_environments import agent as kaggle_agent
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -487,7 +488,7 @@ def sample_from_config_or_path(config_or_path, return_callable):
   if isinstance(config_or_path, str):
     agent_file = environment_utils.read_file(config_or_path)
     if return_callable:
-      return environment_utils.get_last_callable(agent_file)
+      return kaggle_agent.get_last_callable(agent_file)
     else:
       return agent_file
   else:

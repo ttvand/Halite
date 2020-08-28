@@ -86,7 +86,7 @@ NORTH = "NORTH"
 
   mapped_actions.update(base_actions)
   
-  return mapped_actions, history
+  return mapped_actions, history, ship_plans
 
 def get_base_pos(base_data, grid_size):
   base_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
@@ -146,7 +146,7 @@ def my_agent(observation, env_config, **kwargs):
   current_observation = structured_env_obs(env_config, observation, active_id)
   player_obs = observation.players[active_id]
   
-  mapped_actions, HISTORY = get_config_actions(
+  mapped_actions, HISTORY, ship_plans = get_config_actions(
     CONFIG, current_observation, player_obs, observation, env_config, HISTORY,
     rng_action_seed)
      
@@ -154,4 +154,5 @@ def my_agent(observation, env_config, **kwargs):
     # This is to allow for debugging of the history outside of the agent
     return mapped_actions, copy.deepcopy(HISTORY)
   else:
+    print(ship_plans)
     return mapped_actions
