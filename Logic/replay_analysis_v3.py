@@ -7,7 +7,8 @@ import rule_utils
 import utils
 
 my_submission = [16976000][0]
-target_episode = [2712245, 2725663, 2720269, 2604587][-1]
+target_episode = [2712245, 2725663, 2720269, 2604587, 2708786,
+                  2766303][-1]
 num_replays = 1
 
 initial_config = {
