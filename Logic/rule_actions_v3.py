@@ -7111,6 +7111,7 @@ def update_base_camping_strategy(
                      steps_remaining*obs_halite_sum**0.6/(
                        10*base_counts.sum()+1e-9))
     ship_counts = stacked_ships.sum((1, 2))
+    num_opponent_ships = ship_counts[1:].sum()
     all_ship_count = ship_counts.sum()
     ship_value = min(env_config.spawnCost,
                      (steps_remaining-1)*obs_halite_sum**0.6/(
@@ -7417,10 +7418,15 @@ def update_base_camping_strategy(
             current_flood_counter = history[
               'my_base_flooded_counter'].get(base_k, 0)
             if min_threat_count > 0:
-              current_flood_counter = min(
-                my_base_flooded_patience+flood_patience_buffer,
-                current_flood_counter+max(0.1, min_threat_count/np.sqrt(
-                  num_my_bases)-(num_my_bases-1)*0.03))
+              # Correct for the total number of opponent ships - on a map with
+              # 100 opponent ships, all squares will be considered crowded,
+              # that does not mean I am being harrassed by a specific opponent.
+              min_threat_count -= max(0, np.floor((num_opponent_ships-30)/30))
+              if min_threat_count > 0:
+                current_flood_counter = min(
+                  my_base_flooded_patience+flood_patience_buffer,
+                  current_flood_counter+max(0.1, min_threat_count/np.sqrt(
+                    num_my_bases)-(num_my_bases-1)*0.03))
             else:
               if (threat_counts == 0).sum() > 1:
                 current_flood_counter = max(0, current_flood_counter-1)
