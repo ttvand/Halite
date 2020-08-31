@@ -129,7 +129,7 @@ config = {
     'max_attackers_per_base': 3*1,
     'attack_base_multiplier': 300.0,
     'attack_base_less_halite_ships_multiplier_base': 0.9,
-    'attack_base_halite_sum_multiplier': 2.0, #*0, # *0 makes it very aggressive
+    'attack_base_halite_sum_multiplier': 2.0,
     'attack_base_run_enemy_multiplier': 1.0,
     
     'attack_base_catch_enemy_multiplier': 1.0,
@@ -146,8 +146,8 @@ config = {
     
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
-    'max_initial_ships': 50,
-    'max_final_ships': 10,
+    'max_initial_ships': 500,
+    'max_final_ships': 100,
     'initial_standard_ships_hunting_season': 10,
     
     'minimum_standard_ships_hunting_season': 5,
