@@ -4938,9 +4938,12 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     # The converted ship can not be used to defend the newly created base
     my_defend_base_ship_positions[restored_base_pos] = 1
   if (num_bases >= 1 or my_abandoned_base_count > 0) and should_defend:
-    can_defend_abandoned = my_nearest_ship_distances[abandoned_base_pos] <= (
-      opponent_nearest_ship_distances[abandoned_base_pos])
-    num_can_defend_abandoned = can_defend_abandoned.sum()
+    if abandoned_base_pos:
+      can_defend_abandoned = my_nearest_ship_distances[abandoned_base_pos] <= (
+        opponent_nearest_ship_distances[abandoned_base_pos])
+      num_can_defend_abandoned = can_defend_abandoned.sum()
+    else:
+      num_can_defend_abandoned = 0
     defend_desirabilities = player_influence_maps[0] - player_influence_maps[
       1:].max(0)
     abandoned_defend_desirabilities = defend_desirabilities[abandoned_base_pos]
@@ -5004,7 +5007,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
             (abandoned_base_row, abandoned_base_col, num_defenders))
     
     # print(observation['step'], base_locations_defense_budget)
-    # if observation['step'] == 129:
+    # if observation['step'] == 59:
     #   import pdb; pdb.set_trace()
     
     for base_row, base_col, num_defenders in base_locations_defense_budget:
@@ -7042,7 +7045,7 @@ def update_base_camping_strategy(
     env_config, np_rng, continued_camping_bonus=0.2, corner_camping_patience=3,
     other_camping_patience=5, max_non_unique_campers=2,
     max_campers_per_base=2, play_safe_aggression_limit=1,
-    my_base_flooded_patience=15, flood_patience_buffer=5,
+    my_base_flooded_patience=5, flood_patience_buffer=2,
     min_ships_to_consider_camping=5):
   grid_size = stacked_ships.shape[1]
   num_players = stacked_ships.shape[0]
@@ -7111,7 +7114,6 @@ def update_base_camping_strategy(
                      steps_remaining*obs_halite_sum**0.6/(
                        10*base_counts.sum()+1e-9))
     ship_counts = stacked_ships.sum((1, 2))
-    num_opponent_ships = ship_counts[1:].sum()
     all_ship_count = ship_counts.sum()
     ship_value = min(env_config.spawnCost,
                      (steps_remaining-1)*obs_halite_sum**0.6/(
@@ -7255,6 +7257,8 @@ def update_base_camping_strategy(
     ### DEFENSIVE LOGIC ###
     #######################
     opponent_ships = stacked_ships[1:].sum(0) > 0
+    num_opponent_zero_halite_ships = (
+      opponent_ships & (halite_ships == 0)).sum()
     opponent_zero_halite_ships_pos = np.where(
       opponent_ships & (halite_ships == 0))
     if num_my_bases > 0:
@@ -7372,7 +7376,6 @@ def update_base_camping_strategy(
           # me to return to the base
           # Only consider zero halite opponents
           base_row, base_col = base_k
-          threat_counts = np.zeros(4)
           if (opponent_ships & (halite_ships == 0)).sum() > 2:
             potential_threat_rows = opponent_zero_halite_ships_pos[0]
             potential_threat_cols = opponent_zero_halite_ships_pos[1]
@@ -7389,47 +7392,55 @@ def update_base_camping_strategy(
             horiz_dist = np.where(east_dist <= grid_size//2, east_dist,
                                   grid_size-east_dist)
             dist = horiz_dist+vert_dist
-            considered_distance_ids = dist <= 5
+            considered_distance_ids = dist <= 4 # 12 considered squares
             
             if considered_distance_ids.sum() > 1:
               # Check each quadrant for threats
-              north_threat_count = ((south_dist[
+              north_threat_ids = (south_dist[
                 considered_distance_ids] > grid_size//2) & (
                   vert_dist[considered_distance_ids] >= horiz_dist[
-                    considered_distance_ids])).sum()
-              south_threat_count = ((south_dist[
+                    considered_distance_ids])
+              north_threat_score = (
+                1/dist[considered_distance_ids][north_threat_ids]).sum()
+              south_threat_ids = (south_dist[
                 considered_distance_ids] < grid_size//2) & (
                   vert_dist[considered_distance_ids] >= horiz_dist[
-                    considered_distance_ids])).sum()
-              east_threat_count = ((east_dist[
+                    considered_distance_ids])
+              south_threat_score = (1/dist[
+                considered_distance_ids][south_threat_ids]).sum()
+              east_threat_ids = (east_dist[
                 considered_distance_ids] < grid_size//2) & (
                   vert_dist[considered_distance_ids] <= horiz_dist[
-                    considered_distance_ids])).sum()
-              west_threat_count = ((east_dist[
+                    considered_distance_ids])
+              east_threat_score = (1/dist[
+                considered_distance_ids][east_threat_ids]).sum()
+              west_threat_ids = (east_dist[
                 considered_distance_ids] > grid_size//2) & (
                   vert_dist[considered_distance_ids] <= horiz_dist[
-                    considered_distance_ids])).sum()
+                    considered_distance_ids])
+              west_threat_score = (1/dist[
+                considered_distance_ids][west_threat_ids]).sum()
                   
-              threat_counts = np.array([
-                north_threat_count, south_threat_count, east_threat_count,
-                west_threat_count])
+              threat_scores = np.array([
+                north_threat_score, south_threat_score, east_threat_score,
+                west_threat_score])
+              min_threat_score = threat_scores.min()
+            else:
+              min_threat_score = 0
               
-            min_threat_count = threat_counts.min()
             current_flood_counter = history[
               'my_base_flooded_counter'].get(base_k, 0)
-            if min_threat_count > 0:
-              # Correct for the total number of opponent ships - on a map with
-              # 100 opponent ships, all squares will be considered crowded,
-              # that does not mean I am being harrassed by a specific opponent.
-              min_threat_count -= max(0, np.floor((num_opponent_ships-30)/30))
-              if min_threat_count > 0:
-                current_flood_counter = min(
-                  my_base_flooded_patience+flood_patience_buffer,
-                  current_flood_counter+max(0.1, min_threat_count/np.sqrt(
-                    num_my_bases)-(num_my_bases-1)*0.03))
-            else:
-              if (threat_counts == 0).sum() > 1:
-                current_flood_counter = max(0, current_flood_counter-1)
+            
+            # Linear model on the expected min threat score of a sim study
+            expected_min_threat_score = 3.412e-03 - 1.047e-03*(
+              num_opponent_zero_halite_ships) + 8.706e-05*(
+                num_opponent_zero_halite_ships**2) - 2.878e-07*(
+                  num_opponent_zero_halite_ships**3)
+            # print(num_opponent_zero_halite_ships, expected_min_threat_score)
+            current_flood_counter = max(0, min(
+              my_base_flooded_patience+flood_patience_buffer,
+              current_flood_counter+min_threat_score-expected_min_threat_score)
+              )
             history['my_base_flooded_counter'][base_k] = (
               current_flood_counter)
             # print(observation['step'], threat_counts, current_flood_counter)
@@ -8341,7 +8352,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'get_actions_duration': get_actions_duration,
     }
   
-  # if observation['step'] == 74:
+  # if observation['step'] == 184:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details
