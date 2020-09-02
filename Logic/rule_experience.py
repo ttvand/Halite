@@ -561,7 +561,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
   # mean_action_frac = np.zeros_like(action_costs)
   # mean_action_frac[act_ids] = counts/counts.sum()
   
-  import pdb; pdb.set_trace()
+  # import pdb; pdb.set_trace()
   print('Summed reward stats in {} games: {:.2f}'.format(
     num_games, reward_sum))
   if fixed_opponent_pool:
