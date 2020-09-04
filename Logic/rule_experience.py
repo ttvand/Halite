@@ -212,15 +212,20 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
     prev_actions = player_mapped_actions[i]
     was_alive = len(prev_player[2]) > 0 or (
       len(prev_player[1]) > 0 and prev_player[0] >= 500)
+    prev_stacked_ships = np.stack(
+      [rbs[2] for rbs in prev_observation['rewards_bases_ships']])
+    prev_halite_ships = np.stack([
+      rbs[3] for rbs in prev_observation['rewards_bases_ships']]).sum(0)
+    prev_halite_ships[prev_stacked_ships.sum(0) == 0] = -1e-9
     
     if was_alive:
       # Loop over all ships and figure out if a ship was lost unintentionally
       for ship_k in prev_player[2]:
         if not ship_k in current_player[2]:
+          row, col = utils.row_col_from_square_grid_pos(
+            prev_player[2][ship_k][0], grid_size)
           if (not ship_k in prev_actions) or (
               ship_k in prev_actions and prev_actions[ship_k] != "CONVERT"): 
-            row, col = utils.row_col_from_square_grid_pos(
-              prev_player[2][ship_k][0], grid_size)
             ship_action = None if not ship_k in prev_actions else prev_actions[
               ship_k]
             move_row, move_col = rule_utils.move_ship_row_col(
@@ -242,9 +247,23 @@ def get_lost_ships_count(player_mapped_actions, prev_players, current_players,
                 prev_observation['relative_step'] <= 0.975):
             # The ship most likely got boxed in and was forced to convert. 
             # Note that this also counts lost ships due to losing the base.
-            if i == verbose_id:
-              print("Lost ship at step", prev_observation['step']+1)
-            num_lost_ships[i] += 1
+            # Discard strategic base conversions (no nearby opponents)
+            ship_halite = prev_player[2][ship_k][1]
+            any_threat_ships = False
+            for d in rule_utils.MOVE_DIRECTIONS[1:]:
+              move_row, move_col = rule_utils.move_ship_row_col(
+                row, col, d, grid_size)
+              if prev_halite_ships[move_row, move_col] >= 0 and (
+                  prev_halite_ships[move_row, move_col] <= ship_halite):
+                ship_threat_player_id = np.where(prev_stacked_ships[
+                  :, move_row, move_col])[0][0]
+                if ship_threat_player_id != i:
+                  any_threat_ships = True
+                  break
+            if any_threat_ships:
+              if i == verbose_id:
+                print("Lost ship at step", prev_observation['step']+1)
+              num_lost_ships[i] += 1
       
   return num_lost_ships
 
@@ -352,9 +371,11 @@ def collect_experience_single_game(
         0].observation.players[i][0]
       halite_scores[episode_step+1, i] = halite_score
     
+    ordered_current_observation = utils.structured_env_obs(
+      env.configuration, env_observation, 0)
     num_lost_ships[episode_step] = get_lost_ships_count(
       player_mapped_actions, players, env.state[0].observation.players,
-      current_observation, verbose_id=rule_actions_id+0.5)
+      ordered_current_observation, verbose_id=rule_actions_id+0.5)
     
     episode_step += 1
     
