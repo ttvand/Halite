@@ -4,11 +4,11 @@ import numpy as np
 import os
 import pandas as pd
 import rule_utils
+import time
 import utils
 
-my_submission = [16976000][0]
-target_episode = [2712245, 2725663, 2720269, 2604587, 2708786,
-                  2766303, 2840676, 2850993][-1]
+my_submission = [16976000, 17083753][-1]
+target_episode = [2946574, 2946460, 2963176, 2983009][-1]
 num_replays = 1
 
 initial_config = {
@@ -25,43 +25,43 @@ initial_config = {
     'establish_base_smoothed_multiplier': 0.0,
     
     'establish_first_base_smoothed_multiplier_correction': 2.0,
-    'first_base_no_4_way_camping_spot_bonus': 300,
-    'max_camper_ship_budget': 4,
+    'first_base_no_4_way_camping_spot_bonus': 300*0,
+    'max_camper_ship_budget': 2*1,
+    'relative_step_start_camping': 0.15,
     'establish_base_deposit_multiplier': 1.0,
-    'establish_base_less_halite_ships_multiplier_base': 1.0,
     
+    'establish_base_less_halite_ships_multiplier_base': 1.0,
     'max_attackers_per_base': 3*1,
     'attack_base_multiplier': 300.0,
     'attack_base_less_halite_ships_multiplier_base': 0.9,
-    'attack_base_halite_sum_multiplier': 2.0, #*0, # *0 makes it very aggressive
-    'attack_base_run_enemy_multiplier': 1.0,
+    'attack_base_halite_sum_multiplier': 2.0,
     
+    'attack_base_run_enemy_multiplier': 1.0,
     'attack_base_catch_enemy_multiplier': 1.0,
     'collect_run_enemy_multiplier': 10.0,
     'return_base_run_enemy_multiplier': 2.5,
     'establish_base_run_enemy_multiplier': 2.5,
-    'collect_catch_enemy_multiplier': 1.0,
     
+    'collect_catch_enemy_multiplier': 1.0,
     'return_base_catch_enemy_multiplier': 1.0,
     'establish_base_catch_enemy_multiplier': 0.5,
     'two_step_avoid_boxed_enemy_multiplier_base': 0.7,
     'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
-    'min_consecutive_chase_extrapolate': 6,
     
+    'min_consecutive_chase_extrapolate': 6,
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
-    'max_initial_ships': 50,
-    'max_final_ships': 10,
-    'initial_standard_ships_hunting_season': 10,
+    'max_initial_ships': 500,
+    'max_final_ships': 100,
     
+    'initial_standard_ships_hunting_season': 10,
     'minimum_standard_ships_hunting_season': 5,
     'min_standard_ships_fraction_hunting_season': 0.2,
     'max_standard_ships_fraction_hunting_season': 0.6,
     'max_standard_ships_low_clip_fraction_hunting_season': 0.4,
-    'max_standard_ships_high_clip_fraction_hunting_season': 0.8,
     
+    'max_standard_ships_high_clip_fraction_hunting_season': 0.8,
     'max_standard_ships_decided_end_pack_hunting': 2,
-    'max_spawns_per_step': 2,
     'nearby_ship_halite_spawn_constant': 3.0,
     'nearby_halite_spawn_constant': 5.0,
     'remaining_budget_spawn_constant': 0.2,
@@ -78,6 +78,8 @@ initial_config = {
     'escape_influence_prob_divisor': 3.0,
     'rescue_ships_in_trouble': 1,
     
+    'target_strategic_base_distance': 7.0,
+    'target_strategic_num_bases_ship_divisor': 9,
     'max_spawn_relative_step_divisor': 15.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
@@ -259,6 +261,8 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
   env_configuration = utils.dotdict(replay['configuration'])
   history = {}
   prev_history = -1
+  step_times = []
+  my_step_durations = np.zeros((400, 8))
   for i in range(num_steps-1):
     print(i)
     current_units_obs = replay['steps'][i][0]['observation']['players'][
@@ -325,10 +329,24 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
         
       # import pdb; pdb.set_trace()
       prev_history = copy.deepcopy(history)
-      current_actions, history, _, _ = (
+      start_time = time.time()
+      current_actions, history, _, step_details = (
         rule_utils.get_config_or_callable_actions(
           game_agent, obs, current_units_obs, env_observation,
           env_configuration, history))
+      if step_details is not None:
+        step_time = time.time()-start_time
+        step_times.append(step_time)
+        my_step_durations[i] = np.array([
+          step_details['get_actions_duration'],
+          step_details['ship_scores_duration'],
+          step_details['ship_plans_duration'],
+          step_details['ship_map_duration'],
+          step_details['inner_loop_ship_plans_duration'],
+          step_details['recompute_ship_plan_order_duration'],
+          step_details['history_start_duration'],
+          step_details['box_in_duration'],
+          ])
       
       # Overwrite the prev actions in history
       none_included_ship_actions = {k: (actions[k] if (
@@ -353,9 +371,10 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
     #   print(history['prev_step']['observation']['step'],
     #                     prev_history['prev_step']['observation']['step'])
       
-  return (destroyed_conversions, boxed_ship_loss, shipyard_collision_losses,
-          ship_loss, base_loss, ship_non_boxed_loss_counterfactual,
-          all_counterfactual_ship_loss)
+  return ((destroyed_conversions, boxed_ship_loss, shipyard_collision_losses,
+           ship_loss, base_loss, ship_non_boxed_loss_counterfactual,
+           all_counterfactual_ship_loss), np.array(step_times),
+          my_step_durations)
 
 process_each_step = True
 game_agent = [
@@ -379,8 +398,8 @@ for i in range(num_replays):
   other_ids = list(set(range(4)) - set([my_id]))
   
   for j, analysis_id in zip(range(4), [my_id] + other_ids):
-    losses = get_game_ship_base_loss_count(replay, analysis_id, game_agent,
-                                           process_each_step=process_each_step)
+    losses, step_times, step_durations = get_game_ship_base_loss_count(
+      replay, analysis_id, game_agent, process_each_step=process_each_step)
     destroyed_conversion_losses[i, j] = losses[0]
     boxed_ship_losses[i, j] = losses[1]
     shipyard_collision_losses[i, j] = losses[2]
@@ -394,4 +413,6 @@ for i in range(num_replays):
 non_boxed_ship_losses = ship_losses - (
   boxed_ship_losses + shipyard_collision_losses)
 print(ship_non_boxed_loss_counterfactual[:, 0].sum())
+print("Plan duration fraction:",
+      np.round(step_durations[:,2].sum() / step_durations[:,0].sum(), 2))
     

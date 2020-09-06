@@ -10,9 +10,9 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 2 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 85 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 1
+NUM_GAMES = 7
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -102,7 +102,7 @@ config = {
   #   'escape_influence_prob_divisor': ((1.0, 5.0), "float", 1),
   #   'rescue_ships_in_trouble': ((0, 1), "int", 0),
   
-  #   'target_strategic_base_distance': ((6.0, 9.0), "float", 1.0),
+  #   'target_strategic_base_distance': ((6.0, 10.0), "float", 1.0),
   #   'target_strategic_num_bases_ship_divisor': ((5, 15), "int", 1.0),
   #   'max_spawn_relative_step_divisor': ((5.0, 25.0), "float", 1),
   #   'no_spawn_near_base_ship_limit': ((100, 101), "int", 2),
@@ -124,7 +124,7 @@ config = {
     
     'establish_first_base_smoothed_multiplier_correction': 2.0,
     'first_base_no_4_way_camping_spot_bonus': 300*0,
-    'max_camper_ship_budget': 2,
+    'max_camper_ship_budget': 2*1,
     'relative_step_start_camping': 0.15,
     'establish_base_deposit_multiplier': 1.0,
     
@@ -149,8 +149,8 @@ config = {
     'min_consecutive_chase_extrapolate': 6,
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
-    'max_initial_ships': 500,
-    'max_final_ships': 100,
+    'max_initial_ships': 60,
+    'max_final_ships': 60,
     
     'initial_standard_ships_hunting_season': 10,
     'minimum_standard_ships_hunting_season': 5,
@@ -177,7 +177,7 @@ config = {
     'rescue_ships_in_trouble': 1,
     
     'target_strategic_base_distance': 7.0,
-    'target_strategic_num_bases_ship_divisor': 9,
+    'target_strategic_num_bases_ship_divisor': 12,
     'max_spawn_relative_step_divisor': 15.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
