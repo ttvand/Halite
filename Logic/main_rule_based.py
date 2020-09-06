@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 85 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 7
 config = {
@@ -23,7 +23,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': False,
+  'use_multiprocessing': True,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
@@ -177,7 +177,7 @@ config = {
     'rescue_ships_in_trouble': 1,
     
     'target_strategic_base_distance': 7.0,
-    'target_strategic_num_bases_ship_divisor': 12,
+    'target_strategic_num_bases_ship_divisor': 9,
     'max_spawn_relative_step_divisor': 15.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,

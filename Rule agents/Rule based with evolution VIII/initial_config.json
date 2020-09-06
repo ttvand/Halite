@@ -73,7 +73,7 @@
         "escape_influence_prob_divisor": 3.0,
         "rescue_ships_in_trouble": 1,
         "target_strategic_base_distance": 7.0,
-        "target_strategic_num_bases_ship_divisor": 12,
+        "target_strategic_num_bases_ship_divisor": 9,
         "max_spawn_relative_step_divisor": 15.0,
         "no_spawn_near_base_ship_limit": 100,
         "avoid_cycles": 1
