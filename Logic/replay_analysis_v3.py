@@ -8,7 +8,7 @@ import time
 import utils
 
 my_submission = [16976000, 17083753][-1]
-target_episode = [2946574, 2946460, 2963176, 2983009][-1]
+target_episode = [2985496][-1]
 num_replays = 1
 
 initial_config = {
