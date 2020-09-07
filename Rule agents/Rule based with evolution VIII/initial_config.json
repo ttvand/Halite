@@ -76,6 +76,8 @@
         "target_strategic_num_bases_ship_divisor": 9,
         "max_spawn_relative_step_divisor": 15.0,
         "no_spawn_near_base_ship_limit": 100,
-        "avoid_cycles": 1
+        "avoid_cycles": 1,
+        "max_risk_n_step_risky": 0.5,
+        "max_steps_n_step_risky": 70
     }
 }

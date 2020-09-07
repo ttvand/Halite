@@ -7,8 +7,8 @@ import rule_utils
 import time
 import utils
 
-my_submission = [16976000, 17083753][-1]
-target_episode = [3000251][-1]
+my_submission = [17083753, 17103561][-1]
+target_episode = [3012203][-1]
 num_replays = 1
 
 initial_config = {
@@ -51,8 +51,8 @@ initial_config = {
     'min_consecutive_chase_extrapolate': 6,
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
-    'max_initial_ships': 500,
-    'max_final_ships': 100,
+    'max_initial_ships': 60,
+    'max_final_ships': 60,
     
     'initial_standard_ships_hunting_season': 10,
     'minimum_standard_ships_hunting_season': 5,
@@ -83,6 +83,9 @@ initial_config = {
     'max_spawn_relative_step_divisor': 15.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
+    
+    'max_risk_n_step_risky': 0.5,
+    'max_steps_n_step_risky': 70,
     }
 
 this_folder = os.path.dirname(__file__)

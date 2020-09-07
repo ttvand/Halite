@@ -107,6 +107,9 @@ config = {
   #   'max_spawn_relative_step_divisor': ((5.0, 25.0), "float", 1),
   #   'no_spawn_near_base_ship_limit': ((100, 101), "int", 2),
   #   'avoid_cycles': ((0, 1), "int", 0),
+  
+  #   'max_risk_n_step_risky': ((0.1, 0.7), "float", 0),
+  #   'max_steps_n_step_risky': ((0, 100), "int", 0),
   #   }
   
   'initial_config_ranges': {
@@ -181,6 +184,9 @@ config = {
     'max_spawn_relative_step_divisor': 15.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
+    
+    'max_risk_n_step_risky': 0.5,
+    'max_steps_n_step_risky': 70,
     }
   }
 CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"
