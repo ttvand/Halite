@@ -1443,10 +1443,11 @@ def scale_attack_scores_bases_ships(
   second_third_spawn_diff = spawn_diffs[third_id] - spawn_diffs[second_id]
   
   prev_ballistic_mode = history['ballistic_mode']
-  should_start_ballistic = winning_clearly and second_third_spawn_diff > 4
+  should_start_ballistic = winning_clearly and second_third_spawn_diff > 4 and(
+    my_ship_count >= 15)
   should_continue_ballistic = (winning_clearly and (
     second_third_spawn_diff > 1)) or (winning_considerably and (
-    second_third_spawn_diff > 3))
+    second_third_spawn_diff > 3)) and my_ship_count >= 10
   ballistic_mode = should_start_ballistic or (
     prev_ballistic_mode and should_continue_ballistic)
   num_second_bases = base_counts[second_id]
@@ -1471,7 +1472,7 @@ def scale_attack_scores_bases_ships(
       base_id = ordered_base_ids[attack_id]
       base_row = second_base_locations[0][base_id]
       base_col = second_base_locations[1][base_id]
-      opponent_bases_scaled[base_row, base_col] = 9e4
+      opponent_bases_scaled[base_row, base_col] = 1e2
       ballistic_attack_base_targets.append((base_row, base_col))
     
   del_keys = []
