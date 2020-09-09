@@ -3947,13 +3947,18 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
     if ship_k in my_prev_step_base_attacker_ships:
       # Encourage the base attack of a ship to be persistent
       attack_step_multiplier *= 5
-    attack_base_scores = camp_attack_mask*attack_step_multiplier*config[
-      'attack_base_multiplier']*dm*(opponent_bases_scaled)*(config[
+    attack_base_scores = dm*np.minimum(9e5, camp_attack_mask*(
+      attack_step_multiplier)*config['attack_base_multiplier']*(
+        opponent_bases_scaled)*(config[
           'attack_base_less_halite_ships_multiplier_base'] ** (
-          opponent_smoother_less_halite_ships)) - (config[
-            'attack_base_halite_sum_multiplier'] * obs_halite_sum**0.8 / (
-              all_ship_count))*int(my_ship_fraction < 0.5) - 1e12*(
-                ship_halite > 0)
+            opponent_smoother_less_halite_ships))) - (config[
+              'attack_base_halite_sum_multiplier'] * obs_halite_sum**0.8 / (
+                all_ship_count))*int(my_ship_fraction < 0.5) - 1e12*(
+                  ship_halite > 0)
+    # Keep the preference order in ballistic mode without abandoning recue or
+    # base defense ships
+    attack_base_scores = np.minimum(9e5, attack_base_scores) + 1e-10*(
+      attack_base_scores) * (attack_base_scores > 9e5)
                 
     # Update the scores as a function of nearby enemy ships to avoid collisions
     # with opposing ships that carry less halite and promote collisions with
@@ -6181,7 +6186,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   #     main_base_distances)
        
   # Lower the collect scores for non high priority ships for the squares where
-  # a high priority ships has claimed the mvoe position.
+  # a high priority ships has claimed the move position.
   # High priority actions:
   # - Rescue
   # - Base defense
@@ -6426,6 +6431,38 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         
     for ship_id, ship_k in enumerate(collect_ship_keys):
       all_ship_scores[ship_k][0][:] = updated_collect_scores[ship_id]
+      
+  # List the ships that want to attack bases and greedily assign
+  # base squares to the ships with the highest attack scores
+  if max_attackers_per_base > 0:
+    all_attack_details = {}
+    for i in range(my_ship_count):
+      ship_k = ship_ids[ship_order[i]]
+      ship_scores = all_ship_scores[ship_k]
+      attack_base_scores = ship_scores[3]
+      best_collect_score = ship_scores[0].max()
+      best_return_score = ship_scores[1].max()
+      best_establish_score = ship_scores[2].max()
+      best_attack_base_score = attack_base_scores.max()
+      best_other_score = max([
+        best_collect_score, best_return_score, best_establish_score])
+      best_score = max(best_attack_base_score, best_other_score)
+      
+      if best_score == best_attack_base_score:
+        best_collect_pos = np.unravel_index(
+          attack_base_scores.argmax(), attack_base_scores.shape)
+        attack_ship_details = (best_score, ship_k)
+        if best_collect_pos in all_attack_details:
+          all_attack_details[best_collect_pos].append(
+            attack_ship_details)
+        else:
+          all_attack_details[best_collect_pos] = [attack_ship_details]
+          
+    for base_pos in all_attack_details:
+      if len(all_attack_details[base_pos]) > max_attackers_per_base:
+        import pdb; pdb.set_trace()
+        attack_ship_scores = np.array([d[0] for d in (
+          all_attack_details[base_pos])])
       
   # if observation['step'] == 75:
   #   import pdb; pdb.set_trace()
@@ -6918,8 +6955,8 @@ def map_ship_plans_to_actions(
   ordered_debug_ship_plans = [[k]+list(v) for k, v in ship_plans.items()]
   ordered_debug_ship_plans = ordered_debug_ship_plans
   
-  # if observation['step'] == 322:
-  #   import pdb; pdb.set_trace()
+  if observation['step'] == 296:
+    import pdb; pdb.set_trace()
   
   base_attack_override_wait = []
   for target_base in base_attackers:
@@ -9786,7 +9823,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'get_actions_duration': get_actions_duration,
     }
   
-  # if observation['step'] == 98:
-  #   import pdb; pdb.set_trace()
+  if observation['step'] == 296:
+    import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details

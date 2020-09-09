@@ -499,7 +499,10 @@ def sample_from_config_or_path(config_or_path, return_callable):
   if isinstance(config_or_path, str):
     agent_file = environment_utils.read_file(config_or_path)
     if return_callable:
-      return kaggle_agent.get_last_callable(agent_file)
+      try:
+        return kaggle_agent.get_last_callable(agent_file)
+      except:
+        return environment_utils.get_last_callable(agent_file)
     else:
       return agent_file
   else:

@@ -7,8 +7,8 @@ import rule_utils
 import time
 import utils
 
-my_submission = [17083753, 17103561][-1]
-target_episode = [3024561][-1]
+my_submission = [17114329][-1]
+target_episode = [3098601][-1]
 num_replays = 1
 
 initial_config = {
@@ -80,10 +80,14 @@ initial_config = {
     
     'target_strategic_base_distance': 7.0,
     'target_strategic_num_bases_ship_divisor': 9,
+    'target_strategic_triangle_weight': 20.0,  # standard: 20
+    'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
+    # 'target_strategic_triangle_weight': 0.0,
+    # 'target_strategic_influence_desirability_multiplier': 2.0,
     'max_spawn_relative_step_divisor': 15.0,
+    
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
-    
     'max_risk_n_step_risky': 0.5,
     'max_steps_n_step_risky': 70,
     }
