@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import time
 
-my_submission = [17114329][-1]
+my_submission = [17114281, 17114329][0]
 
 # Returns metadata for all episodes for a particular submission
 # You can find your submission id at the top of the list of episodes for your agent on the leaderboard

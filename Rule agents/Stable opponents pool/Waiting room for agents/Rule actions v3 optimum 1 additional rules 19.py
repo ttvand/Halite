@@ -1,9 +1,97 @@
 from collections import OrderedDict
 import copy
+import getpass
 import itertools
 import numpy as np
 from scipy import signal
 import time
+
+
+LOCAL_MODE = getpass.getuser() == 'tom'
+
+CONFIG = {
+    'halite_config_setting_divisor': 1.0,
+    'collect_smoothed_multiplier': 0.0,
+    'collect_actual_multiplier': 5.0,
+    'collect_less_halite_ships_multiplier_base': 0.55,
+    'collect_base_nearest_distance_exponent': 0.2,
+  
+    'return_base_multiplier': 8.0,
+    'return_base_less_halite_ships_multiplier_base': 0.85,
+    'early_game_return_base_additional_multiplier': 0.1,
+    'early_game_return_boost_step': 50,
+    'establish_base_smoothed_multiplier': 0.0,
+    
+    'establish_first_base_smoothed_multiplier_correction': 2.0,
+    'first_base_no_4_way_camping_spot_bonus': 300*0,
+    'start_camp_if_not_winning': 0,
+    'max_camper_ship_budget': 2*1,
+    'relative_step_start_camping': 0.15,
+    
+    'establish_base_deposit_multiplier': 1.0,
+    'establish_base_less_halite_ships_multiplier_base': 1.0,
+    'max_attackers_per_base': 3*1,
+    'attack_base_multiplier': 300.0,
+    'attack_base_less_halite_ships_multiplier_base': 0.9,
+    
+    'attack_base_halite_sum_multiplier': 2.0,
+    'attack_base_run_enemy_multiplier': 1.0,
+    'attack_base_catch_enemy_multiplier': 1.0,
+    'collect_run_enemy_multiplier': 10.0,
+    'return_base_run_enemy_multiplier': 2.5,
+    
+    'establish_base_run_enemy_multiplier': 2.5,
+    'collect_catch_enemy_multiplier': 1.0,
+    'return_base_catch_enemy_multiplier': 1.0,
+    'establish_base_catch_enemy_multiplier': 0.5,
+    'two_step_avoid_boxed_enemy_multiplier_base': 0.7,
+    
+    'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
+    'min_consecutive_chase_extrapolate': 6,
+    'chase_return_base_exponential_bonus': 2.0,
+    'ignore_catch_prob': 0.3,
+    'max_initial_ships': 60,
+    
+    'max_final_ships': 60,
+    'initial_standard_ships_hunting_season': 10,
+    'minimum_standard_ships_hunting_season': 5,
+    'min_standard_ships_fraction_hunting_season': 0.2,
+    'max_standard_ships_fraction_hunting_season': 0.6,
+    
+    'max_standard_ships_low_clip_fraction_hunting_season': 0.4,
+    'max_standard_ships_high_clip_fraction_hunting_season': 0.8,
+    'max_standard_ships_decided_end_pack_hunting': 2,
+    'nearby_ship_halite_spawn_constant': 3.0,
+    'nearby_halite_spawn_constant': 5.0,
+    
+    'remaining_budget_spawn_constant': 0.2,
+    'spawn_score_threshold': 75.0,
+    'boxed_in_halite_convert_divisor': 1.0,
+    'n_step_avoid_min_die_prob_cutoff': 0.05,
+    'n_step_avoid_window_size': 7,
+    
+    'influence_map_base_weight': 2.0,
+    'influence_map_min_ship_weight': 0.0,
+    'influence_weights_additional_multiplier': 2.0,
+    'influence_weights_exponent': 8.0,
+    'escape_influence_prob_divisor': 3.0,
+    
+    'rescue_ships_in_trouble': 1,
+    'target_strategic_base_distance': 7.0,
+    'target_strategic_num_bases_ship_divisor': 9,
+    'target_strategic_triangle_weight': 20.0,  # standard: 20
+    'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
+    
+    'max_spawn_relative_step_divisor': 15.0,
+    'no_spawn_near_base_ship_limit': 100,
+    'avoid_cycles': 1,
+    'max_risk_n_step_risky': 0.5,
+    'max_steps_n_step_risky': 70,
+    
+    'log_near_base_distance': 2,
+    'max_recent_considered_relevant_zero_move_count': 120,
+    'near_base_2_step_risky_min_count': 50,
+    }
 
 
 NORTH = "NORTH"
@@ -363,8 +451,8 @@ def update_scores_enemy_ships(
     ignore_opponent_col = None
     ignore_opponent_distance = None
     
-  # Identify directions where I can certainly reach the base in time and always
-  # mark them as valid
+  # Identify directions where I can certainly reach the base and always mark
+  # them as valid
   ship_halite = halite_ships[row, col]
   safe_return_base_directions = []
   if ship_halite < safe_to_return_halites[row, col]:
@@ -1506,29 +1594,19 @@ def scale_attack_scores_bases_ships(
   # number three is far behind the number two: go ballistic on the number two
   # Prefer opponent bases that are close to my bases and halite, and where the
   # opponent has a relatively low density
-  # Make sure to guarantee some continuity with a start and stop mode
-  winning_considerably = np.all(spawn_diffs >= (
-    6-4*observation['relative_step']))
-  winning_clearly = np.all(spawn_diffs >= (8-4*observation['relative_step']))
+  # Make sure to guarantee some continuity with 
+  winning_considerably = np.all(spawn_diffs >= 4)
+  winning_clearly = np.all(spawn_diffs >= 6)
   second_id = np.argsort(spawn_diffs)[0]
   third_id = np.argsort(spawn_diffs)[1]
   second_third_spawn_diff = spawn_diffs[third_id] - spawn_diffs[second_id]
-  very_tight_fight_for_first = np.abs(spawn_diffs[second_id]) < 1 and (
-    spawn_diffs[third_id] >= (12-8*observation['relative_step']))
-  tight_fight_for_first = np.abs(spawn_diffs[second_id]) < 3 and (
-    spawn_diffs[third_id] >= (8-6*observation['relative_step']))
   
   prev_ballistic_mode = history['ballistic_mode']
-  should_start_ballistic = (
-    winning_clearly and second_third_spawn_diff > (
-      4-2*observation['relative_step']) or very_tight_fight_for_first) and (
-      my_ship_count >= 15-max(0, 40*(observation['relative_step']-0.8)))
-  should_continue_ballistic = (
-    (winning_clearly and (second_third_spawn_diff > 1)) or (
-      winning_considerably and (
-        second_third_spawn_diff > 2-observation['relative_step'])) or (
-        tight_fight_for_first)
-    ) and (my_ship_count >= 10-max(0, 20*(observation['relative_step']-0.8)))
+  should_start_ballistic = winning_clearly and second_third_spawn_diff > 4 and(
+    my_ship_count >= 15)
+  should_continue_ballistic = (winning_clearly and (
+    second_third_spawn_diff > 1)) or (winning_considerably and (
+    second_third_spawn_diff > 3)) and my_ship_count >= 10
   ballistic_mode = should_start_ballistic or (
     prev_ballistic_mode and should_continue_ballistic)
   num_second_bases = base_counts[second_id]
@@ -2695,9 +2773,6 @@ def update_scores_pack_hunt(
   #   max_standard_ships_hunting_season)
   
   max_standard_ships_hunting_season = max(10, int(len(player_obs[2])/2.5))
-  if observation['relative_step'] < config[
-      'early_hunting_season_no_collect_relative_step']:
-    max_standard_ships_hunting_season = 0
   
   # print(observation['step'], opponent_hunt_fraction, num_my_ships,
   #       my_target_standard_ships, max_standard_ships_hunting_season)
@@ -3893,10 +3968,6 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
      opponent_ships, grid_size, all_my_bases, obs_halite, collect_rate,
      halite_ships, observation)
   
-  # Early on, the collect boost is high as the distance from the nearest base
-  # grows. This effect rapidly decays once the hunting season starts
-  stand_still_collect_boost = config['relative_stand_still_collect_boost']
-     
   # print(observation['step'], my_ship_count, (stacked_ships[0] & (
   #   halite_ships == 0)).sum())
   
@@ -3938,11 +4009,6 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
             base_nearest_distance_scores ** config[
               'collect_base_nearest_distance_exponent'])*(
                 ship_influence_priority_multipliers)
-    base_distance = nearest_base_distances_with_my_excluded[row, col]
-    collect_grid_scores[row, col] *= int(num_my_bases_with_excluded > 0)*(
-      stand_still_collect_boost * (1+config[
-        'initial_collect_boost_away_from_base'] * max(0, base_distance-5)/7)**(
-          (1-observation['relative_step'])**14))
                     
     # if observation['step'] == 233:
     #   import pdb; pdb.set_trace()
@@ -4149,8 +4215,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
           opponent_ships_scaled, main_base_distances, ship_scores_duration,
           halite_ships, player_influence_maps, boxed_in_zero_halite_opponents,
           ignore_convert_positions, ship_diff_smoothed,
-          ballistic_attack_base_targets, safe_to_return_halites,
-          safe_to_collect_margin)
+          ballistic_attack_base_targets, safe_to_return_halites)
 
 def get_mask_between_exclude_ends(r1, c1, r2, c2, grid_size):
   rel_pos = get_relative_position(r1, c1, r2, c2, grid_size)
@@ -6089,7 +6154,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
                    opponent_ships_scaled, main_base_distances, history,
                    env_observation, player_influence_maps,
                    ignore_convert_positions, ship_diff_smoothed,
-                   safe_to_return_halites, safe_collect_margin,
+                   safe_to_return_halites,
                    convert_first_ship_on_None_action=True,
                    halite_on_board_mult=1e-6):
   ship_plans_start_time = time.time()
@@ -6303,16 +6368,11 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         else:
           main_base_defense_budget = 2
           
-      early_hunting_season = observation['relative_step'] >= config[
-      'start_hunting_season_relative_step'] and observation[
-        'relative_step'] <= config[
-          'early_hunting_season_no_collect_relative_step']
       # Defend with less passion if my bases were not destroyed before
       if history['num_destroyed_bases'] == 0:
         non_abandoned_min_defenders = 1
-        main_base_defense_budget = min(
-          main_base_defense_budget, 1 + int(
-            num_non_abandoned == 1 or early_hunting_season))
+        main_base_defense_budget = min(main_base_defense_budget,
+                                       1 + int(num_non_abandoned == 1))
       elif history['num_destroyed_bases'] == 1:
         non_abandoned_min_defenders = min(non_abandoned_min_defenders, 2)
         main_base_defense_budget = min(main_base_defense_budget, 2)
@@ -6428,9 +6488,8 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
   
   # Coordinated pack hunting (hoard in fixed directions with zero halite ships)
   # Send all non zero halite ships to a base so we can hunt safely
-  if observation['relative_step'] >= config[
-      'start_hunting_season_relative_step'] and observation[
-        'relative_step'] <= config['end_hunting_season_relative_step']:
+  if observation['relative_step'] >= 0.2 and observation['relative_step'] <= (
+      0.75):
     (all_ship_scores, history,
      override_move_squares_taken) = update_scores_pack_hunt(
       all_ship_scores, config, stacked_ships, observation,
@@ -6745,7 +6804,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
       
   inner_loop_start_time = time.time()
   recompute_ship_plan_order_duration = 0
-  base_return_ship_keys = []
   for i in range(my_ship_count):
     ship_k = ship_ids[ship_order[i]]
     ship_scores = all_ship_scores[ship_k]
@@ -6755,7 +6813,7 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
         player_obs[2][ship_k][0], grid_size)
       valid_directions = ship_scores[6]
       
-      # if observation['step'] == 157 and ship_k == '8-3':
+      # if observation['step'] == 16 and ship_k in ['6-1']:
       #   import pdb; pdb.set_trace()
       
       after_blocked_valid_dirs = copy.copy(ship_scores[6])
@@ -6857,7 +6915,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
                                   (target_row, target_col), True)),
                               row, col, best_score)
         base_distance = DISTANCES[target_row, target_col][row, col]
-        base_return_ship_keys.append(ship_k)
         
         # Mark the ship as returning to a base
         if not ship_k in history['returning_to_base_ships']:
@@ -7050,31 +7107,6 @@ def get_ship_plans(config, observation, player_obs, env_config, verbose,
     ship_priority_scores[ship_order[:(i+1)]] += 1e30 # Max float 32: 3e38
     ship_order = np.argsort(-ship_priority_scores)
     recompute_ship_plan_order_duration += time.time() - reorder_start_time
-    
-  # Override of the ship plan: if I have a ship that is returning to a base
-  # after the first 30 steps, and it can safely collect on an interesting
-  # halite square: collect rather than return. 
-  if observation['relative_step'] > config[
-      'collect_on_safe_return_relative_step']:
-    for ship_k in base_return_ship_keys:
-      row, col = row_col_from_square_grid_pos(
-        player_obs[2][ship_k][0], grid_size)
-      base_row = ship_plans[ship_k][0]
-      base_col = ship_plans[ship_k][1]
-      safe_collect_ship_margin = safe_collect_margin[row, col]
-      return_score = ship_plans[ship_k][6]
-      this_square_collect_score = all_ship_scores[ship_k][0][row, col]
-      distance_to_base = DISTANCES[row, col][base_row, base_col]
-      if safe_collect_ship_margin > 0 and obs_halite[row, col] > 100 and (
-          not occupied_target_squares[row, col]) and return_score < 1e6 and (
-            this_square_collect_score < 1e5) and (
-              distance_to_base > 5-3*observation['relative_step']) and (
-                steps_remaining > distance_to_base):
-        # if observation['step'] == 157 and ship_k == '8-3':
-        #   import pdb; pdb.set_trace()
-        print("Forced gather", observation['step'], row, col)
-        ship_plans[ship_k] = (
-          row, col, [], False, row, col, this_square_collect_score)
     
   # Drop the camping ships from the base attackers if there are no non-camper
   # base attacker for the targeted base
@@ -7490,7 +7522,7 @@ def map_ship_plans_to_actions(
         has_selected_action = True
         del ship_non_self_destructive_actions[ship_k]
         
-    # if observation['step'] == 78 and ship_k in ['30-2', '35-2']:
+    # if observation['step'] == 98 and ship_k in ['7-3']:
     #   import pdb; pdb.set_trace()
         
     if not has_selected_action:
@@ -10101,8 +10133,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
    opponent_ships_scaled, main_base_distances, ship_scores_duration,
    halite_ships, player_influence_maps, boxed_in_zero_halite_opponents,
    ignore_convert_positions, ship_diff_smoothed,
-   ballistic_attack_base_targets, safe_to_return_halites,
-   safe_to_collect_margin) = get_ship_scores(
+   ballistic_attack_base_targets, safe_to_return_halites) = get_ship_scores(
     config, observation, player_obs, env_config, np_rng,
     ignore_bad_attack_directions, history, env_obs_ids, env_observation,
     verbose)
@@ -10123,8 +10154,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     copy.deepcopy(all_ship_scores), np_rng, weighted_base_mask,
     steps_remaining, opponent_ships_sensible_actions, opponent_ships_scaled,
     main_base_distances, history, env_observation, player_influence_maps,
-    ignore_convert_positions, ship_diff_smoothed, safe_to_return_halites,
-    safe_to_collect_margin)
+    ignore_convert_positions, ship_diff_smoothed, safe_to_return_halites)
   
   # Translate the ship high level plans to basic move/convert actions
   (mapped_actions, remaining_budget, my_next_ships, my_next_halite,
@@ -10157,29 +10187,74 @@ def get_config_actions(config, observation, player_obs, env_observation,
     should_spawn_base_next_step, ballistic_attack_base_targets)
   
   mapped_actions.update(base_actions)
-  halite_spent = player_obs[0]-remaining_budget
   
-  get_actions_duration = time.time() - get_actions_start_time
+  return mapped_actions, history, ship_plans
+
+def get_base_pos(base_data, grid_size):
+  base_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  for _, v in base_data.items():
+    row, col = row_col_from_square_grid_pos(v, grid_size)
+    base_pos[row, col] = 1
   
-  step_details = {
-    'ship_scores': all_ship_scores,
-    'plan_ship_scores': plan_ship_scores,
-    'ship_plans': ship_plans,
-    'mapped_actions': mapped_actions,
-    'observation': observation,
-    'player_obs': player_obs,
-    'action_overrides': action_overrides,
-    'box_in_duration': box_in_duration,
-    'history_start_duration': history_start_duration,
-    'ship_scores_duration': ship_scores_duration,
-    'ship_plans_duration': ship_plans_duration,
-    'inner_loop_ship_plans_duration': inner_loop_ship_plans_duration,
-    'recompute_ship_plan_order_duration': recompute_ship_plan_order_duration,
-    'ship_map_duration': ship_map_duration,
-    'get_actions_duration': get_actions_duration,
+  return base_pos
+
+def get_ship_halite_pos(ship_data, grid_size):
+  ship_pos = np.zeros((grid_size, grid_size), dtype=np.bool)
+  ship_halite = np.zeros((grid_size, grid_size), dtype=np.float32)
+  for _, v in ship_data.items():
+    row, col = row_col_from_square_grid_pos(v[0], grid_size)
+    ship_pos[row, col] = 1
+    ship_halite[row, col] = v[1]
+  
+  return ship_pos, ship_halite
+
+def structured_env_obs(env_configuration, env_observation, active_id):
+  grid_size = env_configuration.size
+  halite = np.array(env_observation['halite']).reshape([
+    grid_size, grid_size])
+  
+  num_episode_steps = env_configuration.episodeSteps
+  step = env_observation.step
+  relative_step = step/(num_episode_steps-2)
+  
+  num_agents = len(env_observation.players)
+  rewards_bases_ships = []
+  for i in range(num_agents):
+    player_obs = env_observation.players[i]
+    reward = player_obs[0]
+    base_pos = get_base_pos(player_obs[1], grid_size)
+    ship_pos, ship_halite = get_ship_halite_pos(player_obs[2], grid_size)
+    rewards_bases_ships.append((reward, base_pos, ship_pos, ship_halite))
+    
+  # Move the agent's rewards_bases_ships to the front of the list
+  agent_vals = rewards_bases_ships.pop(active_id)
+  rewards_bases_ships = [agent_vals] + rewards_bases_ships
+  
+  return {
+    'halite': halite,
+    'relative_step': relative_step,
+    'rewards_bases_ships': rewards_bases_ships,
+    'step': step,
     }
+
+
+###############################################################################
+
+HISTORY = {}
+def my_agent(observation, env_config, **kwargs):
+  global HISTORY
+  rng_action_seed = kwargs.get('rng_action_seed', 0)
+  active_id = observation.player
+  current_observation = structured_env_obs(env_config, observation, active_id)
+  player_obs = observation.players[active_id]
   
-  # if observation['step'] == 85:
-  #   import pdb; pdb.set_trace()
-  
-  return mapped_actions, history, halite_spent, step_details
+  mapped_actions, HISTORY, ship_plans = get_config_actions(
+    CONFIG, current_observation, player_obs, observation, env_config, HISTORY,
+    rng_action_seed)
+     
+  if LOCAL_MODE:
+    # This is to allow for debugging of the history outside of the agent
+    return mapped_actions, copy.deepcopy(HISTORY)
+  else:
+    print(ship_plans)
+    return mapped_actions

@@ -24,61 +24,73 @@ CONFIG = {
     
     'establish_first_base_smoothed_multiplier_correction': 2.0,
     'first_base_no_4_way_camping_spot_bonus': 300*0,
-    'max_camper_ship_budget': 4,
+    'start_camp_if_not_winning': 0,
+    'max_camper_ship_budget': 2*1,
+    'relative_step_start_camping': 0.15,
+    
     'establish_base_deposit_multiplier': 1.0,
     'establish_base_less_halite_ships_multiplier_base': 1.0,
-    
     'max_attackers_per_base': 3*1,
     'attack_base_multiplier': 300.0,
     'attack_base_less_halite_ships_multiplier_base': 0.9,
+    
     'attack_base_halite_sum_multiplier': 2.0,
     'attack_base_run_enemy_multiplier': 1.0,
-    
     'attack_base_catch_enemy_multiplier': 1.0,
     'collect_run_enemy_multiplier': 10.0,
     'return_base_run_enemy_multiplier': 2.5,
+    
     'establish_base_run_enemy_multiplier': 2.5,
     'collect_catch_enemy_multiplier': 1.0,
-    
     'return_base_catch_enemy_multiplier': 1.0,
     'establish_base_catch_enemy_multiplier': 0.5,
     'two_step_avoid_boxed_enemy_multiplier_base': 0.7,
+    
     'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
     'min_consecutive_chase_extrapolate': 6,
-    
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
-    'max_initial_ships': 500,
-    'max_final_ships': 100,
-    'initial_standard_ships_hunting_season': 10,
+    'max_initial_ships': 60,
     
+    'max_final_ships': 60,
+    'initial_standard_ships_hunting_season': 10,
     'minimum_standard_ships_hunting_season': 5,
     'min_standard_ships_fraction_hunting_season': 0.2,
     'max_standard_ships_fraction_hunting_season': 0.6,
+    
     'max_standard_ships_low_clip_fraction_hunting_season': 0.4,
     'max_standard_ships_high_clip_fraction_hunting_season': 0.8,
-    
     'max_standard_ships_decided_end_pack_hunting': 2,
     'nearby_ship_halite_spawn_constant': 3.0,
     'nearby_halite_spawn_constant': 5.0,
+    
     'remaining_budget_spawn_constant': 0.2,
     'spawn_score_threshold': 75.0,
-    
     'boxed_in_halite_convert_divisor': 1.0,
     'n_step_avoid_min_die_prob_cutoff': 0.05,
     'n_step_avoid_window_size': 7,
+    
     'influence_map_base_weight': 2.0,
     'influence_map_min_ship_weight': 0.0,
-    
     'influence_weights_additional_multiplier': 2.0,
     'influence_weights_exponent': 8.0,
     'escape_influence_prob_divisor': 3.0,
+    
     'rescue_ships_in_trouble': 1,
     'target_strategic_base_distance': 7.0,
+    'target_strategic_num_bases_ship_divisor': 9,
+    'target_strategic_triangle_weight': 20.0,  # standard: 20
+    'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
     
     'max_spawn_relative_step_divisor': 15.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
+    'max_risk_n_step_risky': 0.5,
+    'max_steps_n_step_risky': 70,
+    
+    'log_near_base_distance': 2,
+    'max_recent_considered_relevant_zero_move_count': 120,
+    'near_base_2_step_risky_min_count': 50,
     }
 
 
