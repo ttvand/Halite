@@ -10,9 +10,9 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 1 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 7 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 1
+NUM_GAMES = 7
 config = {
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -23,7 +23,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': False,
+  'use_multiprocessing': True,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
@@ -62,18 +62,18 @@ config = {
   #   'attack_base_less_halite_ships_multiplier_base': ((0.8, 1.0), "float", 0),
   
   #   'attack_base_halite_sum_multiplier': ((1.0, 3.0), "float", 0),
-  #   'attack_base_run_enemy_multiplier': ((0.1, 2.0), "float", 0),
-  #   'attack_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-  #   'collect_run_enemy_multiplier': ((5.0, 15.0), "float", 0),
-  #   'return_base_run_enemy_multiplier': ((1.5, 4.0), "float", 0),
+  #   'attack_base_run_opponent_multiplier': ((0.1, 2.0), "float", 0),
+  #   'attack_base_catch_opponent_multiplier': ((0.0, 2.0), "float", 0),
+  #   'collect_run_opponent_multiplier': ((5.0, 15.0), "float", 0),
+  #   'return_base_run_opponent_multiplier': ((1.5, 4.0), "float", 0),
   
-  #   'establish_base_run_enemy_multiplier': ((0.0, 5.0), "float", 0),
-  #   'collect_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-  #   'return_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-  #   'establish_base_catch_enemy_multiplier': ((0.0, 2.0), "float", 0),
-  #   'two_step_avoid_boxed_enemy_multiplier_base': ((0.6, 0.9), "float", 0),
+  #   'establish_base_run_opponent_multiplier': ((0.0, 5.0), "float", 0),
+  #   'collect_catch_opponent_multiplier': ((0.0, 2.0), "float", 0),
+  #   'return_base_catch_opponent_multiplier': ((0.0, 2.0), "float", 0),
+  #   'establish_base_catch_opponent_multiplier': ((0.0, 2.0), "float", 0),
+  #   'two_step_avoid_boxed_opponent_multiplier_base': ((0.6, 0.9), "float", 0),
   
-  #   'n_step_avoid_boxed_enemy_multiplier_base': ((0.3, 0.9), "float", 0),
+  #   'n_step_avoid_boxed_opponent_multiplier_base': ((0.3, 0.9), "float", 0),
   #   'min_consecutive_chase_extrapolate': ((4, 10), "int", 1),
   #   'chase_return_base_exponential_bonus': ((1.0, 2.0), "float", 0),
   #   'ignore_catch_prob': ((0.1, 0.5), "float", 0),
@@ -107,17 +107,30 @@ config = {
   #   'target_strategic_base_distance': ((6.0, 10.0), "float", 1.0),
   #   'target_strategic_num_bases_ship_divisor': ((5, 15), "int", 1.0),
   #   'target_strategic_triangle_weight': ((10.0, 30.0), "float", 1.0),
-  #   'target_strategic_influence_desirability_multiplier': ((0.5, 2.0), "float", 1.0),
+  #   'target_strategic_independent_base_distance_multiplier': ((0.0, 10.0), "float", 0.0),
   
+  #   'target_strategic_influence_desirability_multiplier': ((0.5, 2.0), "float", 1.0),
+  #   'target_strategic_potential_divisor': ((5.0, 20.0), "float", 1.0),
   #   'max_spawn_relative_step_divisor': ((5.0, 25.0), "float", 1),
   #   'no_spawn_near_base_ship_limit': ((100, 101), "int", 2),
   #   'avoid_cycles': ((0, 1), "int", 0),
+  
   #   'max_risk_n_step_risky': ((0.1, 0.7), "float", 0),
   #   'max_steps_n_step_risky': ((0, 100), "int", 0),
-  
   #   'log_near_base_distance': ((1, 3), "int", 1),
   #   'max_recent_considered_relevant_zero_move_count': ((100, 101), "int", 20),
   #   'near_base_2_step_risky_min_count': ((50, 51), "int", 0),
+  
+  #   'relative_stand_still_collect_boost': ((1.0, 2.0), "float", 1),
+  #   'initial_collect_boost_away_from_base': ((1.0, 3.0), "float", 1),
+  #   'start_hunting_season_relative_step': ((0.15, 0.2), "float", 1),
+  #   'end_hunting_season_relative_step': ((0.7, 0.8), "float", 0.7),
+  #   'early_hunting_season_less_collect_relative_step': ((0.35, 0.4), "float", 0.3),
+  
+  #   'collect_on_safe_return_relative_step': ((0.05, 0.1), "float", 0),
+  #   'min_halite_to_stop_early_hunt': ((10000.0, 15000.0), "float", 0),
+  #   'early_best_opponent_relative_step': ((0.1, 0.2), "float", 0.1),
+  
   #   }
   
   'initial_config_ranges': {
@@ -146,18 +159,18 @@ config = {
     'attack_base_less_halite_ships_multiplier_base': 0.9,
     
     'attack_base_halite_sum_multiplier': 2.0,
-    'attack_base_run_enemy_multiplier': 1.0,
-    'attack_base_catch_enemy_multiplier': 1.0,
-    'collect_run_enemy_multiplier': 10.0,
-    'return_base_run_enemy_multiplier': 2.5,
+    'attack_base_run_opponent_multiplier': 1.0,
+    'attack_base_catch_opponent_multiplier': 1.0,
+    'collect_run_opponent_multiplier': 10.0,
+    'return_base_run_opponent_multiplier': 2.5,
     
-    'establish_base_run_enemy_multiplier': 2.5,
-    'collect_catch_enemy_multiplier': 1.0,
-    'return_base_catch_enemy_multiplier': 1.0,
-    'establish_base_catch_enemy_multiplier': 0.5,
-    'two_step_avoid_boxed_enemy_multiplier_base': 0.7,
+    'establish_base_run_opponent_multiplier': 2.5,
+    'collect_catch_opponent_multiplier': 1.0,
+    'return_base_catch_opponent_multiplier': 1.0,
+    'establish_base_catch_opponent_multiplier': 0.5,
+    'two_step_avoid_boxed_opponent_multiplier_base': 0.7,
     
-    'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
+    'n_step_avoid_boxed_opponent_multiplier_base': 0.45,
     'min_consecutive_chase_extrapolate': 6,
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
@@ -190,25 +203,34 @@ config = {
     'rescue_ships_in_trouble': 1,
     'target_strategic_base_distance': 7.0,
     'target_strategic_num_bases_ship_divisor': 9,
-    'target_strategic_triangle_weight': 20.0,  # standard: 20
-    'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
+    'target_strategic_triangle_weight': 3.0,  # standard: 20
+    'target_strategic_independent_base_distance_multiplier': 0.5,  # standard 8.0
+    # 'target_strategic_triangle_weight': 20.0,  # standard: 20
+    # 'target_strategic_independent_base_distance_multiplier': 8.0,  # standard 8.0
     
-    'max_spawn_relative_step_divisor': 15.0,
+    # 'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
+    # 'target_strategic_potential_divisor': 15.0,  # standard: 15.0
+    'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
+    'target_strategic_potential_divisor': 10.0,  # standard: 15.0
+    'max_spawn_relative_step_divisor': 12.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
+    
     'max_risk_n_step_risky': 0.5,
     'max_steps_n_step_risky': 70,
-    
     'log_near_base_distance': 2,
     'max_recent_considered_relevant_zero_move_count': 120,
     'near_base_2_step_risky_min_count': 50,
+    
     'relative_stand_still_collect_boost': 1.5,
     'initial_collect_boost_away_from_base': 2.0,
-    
     'start_hunting_season_relative_step': 0.1875,
     'end_hunting_season_relative_step': 0.75,
-    'early_hunting_season_no_collect_relative_step': 0.375,
+    'early_hunting_season_less_collect_relative_step': 0.375,
+    
     'collect_on_safe_return_relative_step': 0.075,
+    'min_halite_to_stop_early_hunt': 15000.0,
+    'early_best_opponent_relative_step': 0.15,
     }
   }
 CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"

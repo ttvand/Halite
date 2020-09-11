@@ -7,8 +7,8 @@ import rule_utils
 import time
 import utils
 
-my_submission = [17114281, 17114329][-1]
-target_episode = [3056486][-1]
+my_submission = [17114281, 17114329][0]
+target_episode = [3149006][-1]
 num_replays = 1
 
 initial_config = {
@@ -37,18 +37,18 @@ initial_config = {
     'attack_base_less_halite_ships_multiplier_base': 0.9,
     
     'attack_base_halite_sum_multiplier': 2.0,
-    'attack_base_run_enemy_multiplier': 1.0,
-    'attack_base_catch_enemy_multiplier': 1.0,
-    'collect_run_enemy_multiplier': 10.0,
-    'return_base_run_enemy_multiplier': 2.5,
+    'attack_base_run_opponent_multiplier': 1.0,
+    'attack_base_catch_opponent_multiplier': 1.0,
+    'collect_run_opponent_multiplier': 10.0,
+    'return_base_run_opponent_multiplier': 2.5,
     
-    'establish_base_run_enemy_multiplier': 2.5,
-    'collect_catch_enemy_multiplier': 1.0,
-    'return_base_catch_enemy_multiplier': 1.0,
-    'establish_base_catch_enemy_multiplier': 0.5,
-    'two_step_avoid_boxed_enemy_multiplier_base': 0.7,
+    'establish_base_run_opponent_multiplier': 2.5,
+    'collect_catch_opponent_multiplier': 1.0,
+    'return_base_catch_opponent_multiplier': 1.0,
+    'establish_base_catch_opponent_multiplier': 0.5,
+    'two_step_avoid_boxed_opponent_multiplier_base': 0.7,
     
-    'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
+    'n_step_avoid_boxed_opponent_multiplier_base': 0.45,
     'min_consecutive_chase_extrapolate': 6,
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
@@ -100,6 +100,7 @@ initial_config = {
     'end_hunting_season_relative_step': 0.75,
     'early_hunting_season_no_collect_relative_step': 0.375,
     'collect_on_safe_return_relative_step': 0.075,
+    'min_halite_to_stop_early_hunt': 18000,
     }
 
 this_folder = os.path.dirname(__file__)

@@ -70,7 +70,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Self play rule_actions_v2 optimum 4 additional rules 2 deterministic': 1,
     'Self play rule_actions_v2 optimum 4 additional rules 2': 1,
     'Self play rule_actions_v2 optimum 4 additional rules 3': 1,
-    'C40': 1,
+    'C40': 2,
     'Self play rule_actions_v2 optimum 4 additional rules 4': 1,
     'Self play rule_actions_v2 optimum 4 additional rules 5': 1,
     'Self play rule_actions_v2 optimum 4 additional rules 6': 1,
