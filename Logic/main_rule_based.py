@@ -10,10 +10,10 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 7 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 20 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 7
-config = {
+NUM_GAMES = 1
+config = { 
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
   'num_games_evaluation': NUM_GAMES*0,
@@ -23,13 +23,13 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': True,
+  'use_multiprocessing': False,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
   'deterministic_games': deterministic_games,
-  'episode_steps_override': None,
-  'early_episode_termination_steps': None,
+  'episode_steps_override': None,  # Also adjusts the relative step
+  'early_episode_termination_steps': None,  # Exits environment after N steps
   
   'num_agents_per_game': 4,
   'pool_name': 'Rule based with evolution IX',
@@ -130,7 +130,8 @@ config = {
   #   'collect_on_safe_return_relative_step': ((0.05, 0.1), "float", 0),
   #   'min_halite_to_stop_early_hunt': ((10000.0, 15000.0), "float", 0),
   #   'early_best_opponent_relative_step': ((0.1, 0.2), "float", 0.1),
-  
+  #   'surrounding_ships_cycle_extrapolate_step_count': ((4, 6), "int", 3),
+  #   'surrounding_ships_extended_cycle_extrapolate_step_count': ((5, 9), "int", 4),
   #   }
   
   'initial_config_ranges': {
@@ -203,15 +204,11 @@ config = {
     'rescue_ships_in_trouble': 1,
     'target_strategic_base_distance': 7.0,
     'target_strategic_num_bases_ship_divisor': 9,
-    'target_strategic_triangle_weight': 3.0,  # standard: 20
-    'target_strategic_independent_base_distance_multiplier': 0.5,  # standard 8.0
-    # 'target_strategic_triangle_weight': 20.0,  # standard: 20
-    # 'target_strategic_independent_base_distance_multiplier': 8.0,  # standard 8.0
+    'target_strategic_triangle_weight': 3.0,  # initially: 20
+    'target_strategic_independent_base_distance_multiplier': 0.5,  # initially 8.0
     
-    # 'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
-    # 'target_strategic_potential_divisor': 15.0,  # standard: 15.0
-    'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
-    'target_strategic_potential_divisor': 10.0,  # standard: 15.0
+    'target_strategic_influence_desirability_multiplier': 1.0,  # initially: 1.0
+    'target_strategic_potential_divisor': 10.0,  # initially: 15.0
     'max_spawn_relative_step_divisor': 12.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
@@ -231,6 +228,8 @@ config = {
     'collect_on_safe_return_relative_step': 0.075,
     'min_halite_to_stop_early_hunt': 15000.0,
     'early_best_opponent_relative_step': 0.15,
+    'surrounding_ships_cycle_extrapolate_step_count': 5,
+    'surrounding_ships_extended_cycle_extrapolate_step_count': 7,
     }
   }
 CONFIG_SETTINGS_EXTENSION = "config_settings_scores.csv"

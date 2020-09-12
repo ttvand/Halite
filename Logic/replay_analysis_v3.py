@@ -8,7 +8,7 @@ import time
 import utils
 
 my_submission = [17114281, 17114329][0]
-target_episode = [3149006][-1]
+target_episode = [3191928][-1]
 num_replays = 1
 
 initial_config = {
@@ -81,26 +81,32 @@ initial_config = {
     'rescue_ships_in_trouble': 1,
     'target_strategic_base_distance': 7.0,
     'target_strategic_num_bases_ship_divisor': 9,
-    'target_strategic_triangle_weight': 20.0,  # standard: 20
-    'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
+    'target_strategic_triangle_weight': 3.0,  # initially: 20
+    'target_strategic_independent_base_distance_multiplier': 0.5,  # initially 8.0
     
-    'max_spawn_relative_step_divisor': 15.0,
+    'target_strategic_influence_desirability_multiplier': 1.0,  # initially: 1.0
+    'target_strategic_potential_divisor': 10.0,  # initially: 15.0
+    'max_spawn_relative_step_divisor': 12.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
+    
     'max_risk_n_step_risky': 0.5,
     'max_steps_n_step_risky': 70,
-    
     'log_near_base_distance': 2,
     'max_recent_considered_relevant_zero_move_count': 120,
     'near_base_2_step_risky_min_count': 50,
+    
     'relative_stand_still_collect_boost': 1.5,
     'initial_collect_boost_away_from_base': 2.0,
-    
     'start_hunting_season_relative_step': 0.1875,
     'end_hunting_season_relative_step': 0.75,
-    'early_hunting_season_no_collect_relative_step': 0.375,
+    'early_hunting_season_less_collect_relative_step': 0.375,
+    
     'collect_on_safe_return_relative_step': 0.075,
-    'min_halite_to_stop_early_hunt': 18000,
+    'min_halite_to_stop_early_hunt': 15000.0,
+    'early_best_opponent_relative_step': 0.15,
+    'surrounding_ships_cycle_extrapolate_step_count': 5,
+    'surrounding_ships_extended_cycle_extrapolate_step_count': 7,
     }
 
 this_folder = os.path.dirname(__file__)

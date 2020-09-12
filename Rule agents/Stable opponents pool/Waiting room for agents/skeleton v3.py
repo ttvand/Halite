@@ -35,18 +35,18 @@ CONFIG = {
     'attack_base_less_halite_ships_multiplier_base': 0.9,
     
     'attack_base_halite_sum_multiplier': 2.0,
-    'attack_base_run_enemy_multiplier': 1.0,
-    'attack_base_catch_enemy_multiplier': 1.0,
-    'collect_run_enemy_multiplier': 10.0,
-    'return_base_run_enemy_multiplier': 2.5,
+    'attack_base_run_opponent_multiplier': 1.0,
+    'attack_base_catch_opponent_multiplier': 1.0,
+    'collect_run_opponent_multiplier': 10.0,
+    'return_base_run_opponent_multiplier': 2.5,
     
-    'establish_base_run_enemy_multiplier': 2.5,
-    'collect_catch_enemy_multiplier': 1.0,
-    'return_base_catch_enemy_multiplier': 1.0,
-    'establish_base_catch_enemy_multiplier': 0.5,
-    'two_step_avoid_boxed_enemy_multiplier_base': 0.7,
+    'establish_base_run_opponent_multiplier': 2.5,
+    'collect_catch_opponent_multiplier': 1.0,
+    'return_base_catch_opponent_multiplier': 1.0,
+    'establish_base_catch_opponent_multiplier': 0.5,
+    'two_step_avoid_boxed_opponent_multiplier_base': 0.7,
     
-    'n_step_avoid_boxed_enemy_multiplier_base': 0.45,
+    'n_step_avoid_boxed_opponent_multiplier_base': 0.45,
     'min_consecutive_chase_extrapolate': 6,
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
@@ -79,18 +79,32 @@ CONFIG = {
     'rescue_ships_in_trouble': 1,
     'target_strategic_base_distance': 7.0,
     'target_strategic_num_bases_ship_divisor': 9,
-    'target_strategic_triangle_weight': 20.0,  # standard: 20
-    'target_strategic_influence_desirability_multiplier': 1.0,  # standard: 1.0
+    'target_strategic_triangle_weight': 3.0,  # initially: 20
+    'target_strategic_independent_base_distance_multiplier': 0.5,  # initially 8.0
     
-    'max_spawn_relative_step_divisor': 15.0,
+    'target_strategic_influence_desirability_multiplier': 1.0,  # initially: 1.0
+    'target_strategic_potential_divisor': 10.0,  # initially: 15.0
+    'max_spawn_relative_step_divisor': 12.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
+    
     'max_risk_n_step_risky': 0.5,
     'max_steps_n_step_risky': 70,
-    
     'log_near_base_distance': 2,
     'max_recent_considered_relevant_zero_move_count': 120,
     'near_base_2_step_risky_min_count': 50,
+    
+    'relative_stand_still_collect_boost': 1.5,
+    'initial_collect_boost_away_from_base': 2.0,
+    'start_hunting_season_relative_step': 0.1875,
+    'end_hunting_season_relative_step': 0.75,
+    'early_hunting_season_less_collect_relative_step': 0.375,
+    
+    'collect_on_safe_return_relative_step': 0.075,
+    'min_halite_to_stop_early_hunt': 15000.0,
+    'early_best_opponent_relative_step': 0.15,
+    'surrounding_ships_cycle_extrapolate_step_count': 5,
+    'surrounding_ships_extended_cycle_extrapolate_step_count': 7,
     }
 
 

@@ -76,8 +76,10 @@
         "rescue_ships_in_trouble": 1,
         "target_strategic_base_distance": 7.0,
         "target_strategic_num_bases_ship_divisor": 9,
-        "target_strategic_triangle_weight": 20.0,
+        "target_strategic_triangle_weight": 3.0,
+        "target_strategic_independent_base_distance_multiplier": 0.5,
         "target_strategic_influence_desirability_multiplier": 1.0,
+        "target_strategic_potential_divisor": 10.0,
         "max_spawn_relative_step_divisor": 12.0,
         "no_spawn_near_base_ship_limit": 100,
         "avoid_cycles": 1,
@@ -90,9 +92,11 @@
         "initial_collect_boost_away_from_base": 2.0,
         "start_hunting_season_relative_step": 0.1875,
         "end_hunting_season_relative_step": 0.75,
-        "early_hunting_season_no_collect_relative_step": 0.375,
+        "early_hunting_season_less_collect_relative_step": 0.375,
         "collect_on_safe_return_relative_step": 0.075,
-        "min_halite_to_stop_early_hunt": 15000,
-        "early_best_opponent_relative_step": 0.15
+        "min_halite_to_stop_early_hunt": 15000.0,
+        "early_best_opponent_relative_step": 0.15,
+        "surrounding_ships_cycle_extrapolate_step_count": 5,
+        "surrounding_ships_extended_cycle_extrapolate_step_count": 7
     }
 }
