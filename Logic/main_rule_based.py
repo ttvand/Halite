@@ -12,7 +12,7 @@ import utils
 deterministic_games = True
 MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
-NUM_GAMES = 1
+NUM_GAMES = 7
 config = { 
   'max_pool_size': 30, # 1 Means pure self play
   'num_games_previous_pools': NUM_GAMES*0,
@@ -127,7 +127,12 @@ config = {
   #   'end_hunting_season_relative_step': ((0.7, 0.8), "float", 0.7),
   #   'early_hunting_season_less_collect_relative_step': ((0.35, 0.4), "float", 0.3),
   
+  #   'max_standard_ships_early_hunting_season': ((2, 10), "int", 0),
+  #   'late_hunting_season_more_collect_relative_step': ((0.4, 0.6), "float", 0.3),
+  #   'late_hunting_season_standard_min_fraction': ((0.5, 0.9), "float", 0),
+  #   'max_standard_ships_late_hunting_season': ((10, 20), "int", 0),
   #   'collect_on_safe_return_relative_step': ((0.05, 0.1), "float", 0),
+  
   #   'min_halite_to_stop_early_hunt': ((10000.0, 15000.0), "float", 0),
   #   'early_best_opponent_relative_step': ((0.1, 0.2), "float", 0.1),
   #   'surrounding_ships_cycle_extrapolate_step_count': ((4, 6), "int", 3),
@@ -227,7 +232,7 @@ config = {
     
     'max_standard_ships_early_hunting_season': 5,
     'late_hunting_season_more_collect_relative_step': 0.5,
-    'late_hunting_season_standard_min_fraction': 0.6,
+    'late_hunting_season_standard_min_fraction': 0.7,
     'max_standard_ships_late_hunting_season': 15,
     'collect_on_safe_return_relative_step': 0.075,
     

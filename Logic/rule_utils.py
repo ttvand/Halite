@@ -115,6 +115,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Rule actions v3 optimum 1 additional rules 23 - 2': 1,
     'Rule actions v3 optimum 1 additional rules 23 - 3': 1,
     'Rule actions v3 optimum 1 additional rules 23 - 4': 1,
+    'Rule actions v3 optimum 1 additional rules 24': 1,
     'Base attacker': 0.1,
     'Runner': 0.1,
     # 'Greedy - many spawns and conversions': 1,
@@ -157,7 +158,8 @@ def update_learning_progress(experiment_name, data_vals):
     except:
       # This can happen if the stable opponents pool changes throughout a
       # single agent pool iteration.
-      import pdb; pdb.set_trace()
+      pass
+      # import pdb; pdb.set_trace()
   else:
     progress = pd.DataFrame(data_vals, index=[0])
   

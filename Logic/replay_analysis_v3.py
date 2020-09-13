@@ -7,8 +7,9 @@ import rule_utils
 import time
 import utils
 
-my_submission = [17114281, 17114329, 17168045, 17170621, 17170654][-2]
-target_episode = [3208289][-1]
+my_submission = [17114281, 17114329, 17168045, 17170621, 17170654, 17170690][
+  -1]
+target_episode = [3210005][-1]
 num_replays = 1
 
 initial_config = {
