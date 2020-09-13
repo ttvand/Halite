@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import time
 
-my_submissions = [17114281, 17114329]
+my_submissions = [17114281, 17114329, 17168045, 17170621, 17170654]
 
 # Returns metadata for all episodes for a particular submission
 # You can find your submission id at the top of the list of episodes for your
@@ -29,6 +29,7 @@ for my_submission in my_submissions:
   # Iterate over all episodes to get the json replay in reverse order (more
   # recent games are probably more interesting)
   for i in range(num_episodes-1, -1, -1):
+    print("Loading episode", str(num_episodes-i), "of", num_episodes)
     episode_id = episode_ids[i]
     f = os.path.join(data_folder,
                      str(episode_id) + '-' + str(my_agent_ids[i]) + '.json')

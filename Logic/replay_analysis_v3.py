@@ -7,8 +7,8 @@ import rule_utils
 import time
 import utils
 
-my_submission = [17114281, 17114329][0]
-target_episode = [3191928][-1]
+my_submission = [17114281, 17114329, 17168045, 17170621, 17170654][-2]
+target_episode = [3208289][-1]
 num_replays = 1
 
 initial_config = {
@@ -80,7 +80,7 @@ initial_config = {
     
     'rescue_ships_in_trouble': 1,
     'target_strategic_base_distance': 7.0,
-    'target_strategic_num_bases_ship_divisor': 9,
+    'target_strategic_num_bases_ship_divisor': 5,
     'target_strategic_triangle_weight': 3.0,  # initially: 20
     'target_strategic_independent_base_distance_multiplier': 0.5,  # initially 8.0
     
@@ -102,9 +102,14 @@ initial_config = {
     'end_hunting_season_relative_step': 0.75,
     'early_hunting_season_less_collect_relative_step': 0.375,
     
+    'max_standard_ships_early_hunting_season': 5,
+    'late_hunting_season_more_collect_relative_step': 0.5,
+    'late_hunting_season_standard_min_fraction': 0.6,
+    'max_standard_ships_late_hunting_season': 15,
     'collect_on_safe_return_relative_step': 0.075,
+    
     'min_halite_to_stop_early_hunt': 15000.0,
-    'early_best_opponent_relative_step': 0.15,
+    'early_best_opponent_relative_step': 0.5,
     'surrounding_ships_cycle_extrapolate_step_count': 5,
     'surrounding_ships_extended_cycle_extrapolate_step_count': 7,
     }
@@ -373,8 +378,13 @@ def get_game_ship_base_loss_count(replay, player_id, game_agent,
           ])
       
       # Overwrite the prev actions in history
-      none_included_ship_actions = {k: (actions[k] if (
-        k in actions) else None) for k in current_units_obs[2]}
+      try:
+        none_included_ship_actions = {k: (actions[k] if (
+          k in actions) else None) for k in current_units_obs[2]}
+      except:
+        # This happens when my submission times out
+        import pdb; pdb.set_trace()
+        x=1
       history['prev_step']['my_ship_actions'] = none_included_ship_actions
       
       # print(current_actions, actions)

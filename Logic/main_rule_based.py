@@ -10,7 +10,7 @@ import utils
 
 # Possibly make the played games deterministic
 deterministic_games = True
-MAIN_LOOP_INITIAL_SEED = 20 # This allows flexible inspection of replay videos
+MAIN_LOOP_INITIAL_SEED = 0 # This allows flexible inspection of replay videos
 
 NUM_GAMES = 1
 config = { 
@@ -23,7 +23,7 @@ config = {
   'record_videos_new_iteration': True,
   'record_videos_each_main_loop': True,
   'save_experience_data_to_disk': True,
-  'use_multiprocessing': False,
+  'use_multiprocessing': True,
   'play_fixed_pool_only': True,
   'play_fixed_pool_fit_prev_data': True,
   'fixed_opponents_num_repeat_first_configs': NUM_GAMES,
@@ -225,9 +225,14 @@ config = {
     'end_hunting_season_relative_step': 0.75,
     'early_hunting_season_less_collect_relative_step': 0.375,
     
+    'max_standard_ships_early_hunting_season': 5,
+    'late_hunting_season_more_collect_relative_step': 0.5,
+    'late_hunting_season_standard_min_fraction': 0.6,
+    'max_standard_ships_late_hunting_season': 15,
     'collect_on_safe_return_relative_step': 0.075,
+    
     'min_halite_to_stop_early_hunt': 15000.0,
-    'early_best_opponent_relative_step': 0.15,
+    'early_best_opponent_relative_step': 0.5,
     'surrounding_ships_cycle_extrapolate_step_count': 5,
     'surrounding_ships_extended_cycle_extrapolate_step_count': 7,
     }

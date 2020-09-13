@@ -532,7 +532,7 @@ def play_games(pool_name, num_games, max_pool_size, num_agents,
     n_act_random_seeds.append(act_random_seeds[i])
     n_record_games.append(i == num_skipped)
   
-  if use_multiprocessing:
+  if use_multiprocessing and num_games > 1:
     with mp.Pool(processes=mp.cpu_count()-1) as pool:
       results = [pool.apply_async(
                   collect_experience_single_game, args=(
