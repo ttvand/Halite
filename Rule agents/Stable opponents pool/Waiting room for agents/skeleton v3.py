@@ -102,10 +102,11 @@ CONFIG = {
     
     'max_standard_ships_early_hunting_season': 5,
     'late_hunting_season_more_collect_relative_step': 0.5,
+    'late_hunting_season_collect_max_n_step_risk': 0.4,
     'late_hunting_season_standard_min_fraction': 0.7,
     'max_standard_ships_late_hunting_season': 15,
-    'collect_on_safe_return_relative_step': 0.075,
     
+    'collect_on_safe_return_relative_step': 0.075,
     'min_halite_to_stop_early_hunt': 15000.0,
     'early_best_opponent_relative_step': 0.5,
     'surrounding_ships_cycle_extrapolate_step_count': 5,

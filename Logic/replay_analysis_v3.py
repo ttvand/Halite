@@ -7,10 +7,9 @@ import rule_utils
 import time
 import utils
 
-my_submission = [17114281, 17114329, 17168045, 17170621, 17170654, 17170690][
-  -1]
-target_episode = [3210005][-1]
-num_replays = 1
+my_submissions = [17114281, 17114329, 17168045, 17170621, 17170654, 17170690,
+                  17171012]
+target_episode = 3238063 # Automatically matches the relevant submission
 
 initial_config = {
     'halite_config_setting_divisor': 1.0,
@@ -81,7 +80,7 @@ initial_config = {
     
     'rescue_ships_in_trouble': 1,
     'target_strategic_base_distance': 7.0,
-    'target_strategic_num_bases_ship_divisor': 5,
+    'target_strategic_num_bases_ship_divisor': 9,
     'target_strategic_triangle_weight': 3.0,  # initially: 20
     'target_strategic_independent_base_distance_multiplier': 0.5,  # initially 8.0
     
@@ -105,7 +104,7 @@ initial_config = {
     
     'max_standard_ships_early_hunting_season': 5,
     'late_hunting_season_more_collect_relative_step': 0.5,
-    'late_hunting_season_standard_min_fraction': 0.6,
+    'late_hunting_season_standard_min_fraction': 0.7,
     'max_standard_ships_late_hunting_season': 15,
     'collect_on_safe_return_relative_step': 0.075,
     
@@ -113,16 +112,25 @@ initial_config = {
     'early_best_opponent_relative_step': 0.5,
     'surrounding_ships_cycle_extrapolate_step_count': 5,
     'surrounding_ships_extended_cycle_extrapolate_step_count': 7,
+    'initial_collect_override_relative_step': 0.125,
     }
 
 this_folder = os.path.dirname(__file__)
 replay_folder = os.path.join(this_folder, '../Rule agents/Leaderboard replays/')
-data_folder = os.path.join(replay_folder, str(my_submission))
-json_files = np.sort([f for f in os.listdir(data_folder) if f[-4:] == "json"])
-episode_match = [str(target_episode) in f for f in json_files]
-json_file = [f for (f, m) in zip(json_files, episode_match) if m][0]
-json_path = os.path.join(data_folder, json_file)
-print(json_path)
+episode_found = False
+for my_submission in my_submissions:
+  data_folder = os.path.join(replay_folder, str(my_submission))
+  json_files = np.sort([f for f in os.listdir(data_folder) if f[-4:] == "json"])
+  episode_match = [str(target_episode) in f for f in json_files]
+  if np.any(np.array(episode_match)):
+    json_file = [f for (f, m) in zip(json_files, episode_match) if m][0]
+    json_path = os.path.join(data_folder, json_file)
+    episode_found = True
+    print(json_path)
+    break
+
+if not episode_found:
+  raise ValueError("First load the relevant data with scrape_json.py")
 
 with open(json_path) as f:
   raw_data = json.load(f)
@@ -418,6 +426,7 @@ game_agent = [
     return_callable=True),  # Index 0: Stable opponents folder
   initial_config][  # Index 1: Main rule actions code
     1]
+num_replays = 1
 destroyed_conversion_losses = np.zeros((num_replays, 4))
 boxed_ship_losses = np.zeros((num_replays, 4))
 shipyard_collision_losses = np.zeros((num_replays, 4))
