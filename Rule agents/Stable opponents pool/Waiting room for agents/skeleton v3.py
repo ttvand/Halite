@@ -53,56 +53,50 @@ CONFIG = {
     'max_initial_ships': 60,
     
     'max_final_ships': 60,
-    'initial_standard_ships_hunting_season': 10,
-    'minimum_standard_ships_hunting_season': 5,
-    'min_standard_ships_fraction_hunting_season': 0.2,
-    'max_standard_ships_fraction_hunting_season': 0.6,
-    
-    'max_standard_ships_low_clip_fraction_hunting_season': 0.4,
-    'max_standard_ships_high_clip_fraction_hunting_season': 0.8,
     'max_standard_ships_decided_end_pack_hunting': 2,
     'nearby_ship_halite_spawn_constant': 3.0,
     'nearby_halite_spawn_constant': 5.0,
-    
     'remaining_budget_spawn_constant': 0.2,
+    
     'spawn_score_threshold': 75.0,
     'boxed_in_halite_convert_divisor': 1.0,
     'n_step_avoid_min_die_prob_cutoff': 0.05,
     'n_step_avoid_window_size': 7,
-    
     'influence_map_base_weight': 2.0,
+    
     'influence_map_min_ship_weight': 0.0,
     'influence_weights_additional_multiplier': 2.0,
     'influence_weights_exponent': 8.0,
     'escape_influence_prob_divisor': 3.0,
-    
     'rescue_ships_in_trouble': 1,
+    
     'target_strategic_base_distance': 7.0,
     'target_strategic_num_bases_ship_divisor': 9,
     'target_strategic_triangle_weight': 3.0,  # initially: 20
     'target_strategic_independent_base_distance_multiplier': 0.5,  # initially 8.0
-    
     'target_strategic_influence_desirability_multiplier': 1.0,  # initially: 1.0
+    
     'target_strategic_potential_divisor': 10.0,  # initially: 15.0
     'max_spawn_relative_step_divisor': 12.0,
     'no_spawn_near_base_ship_limit': 100,
     'avoid_cycles': 1,
-    
     'max_risk_n_step_risky': 0.5,
+    
     'max_steps_n_step_risky': 70,
     'log_near_base_distance': 2,
     'max_recent_considered_relevant_zero_move_count': 120,
     'near_base_2_step_risky_min_count': 50,
-    
     'relative_stand_still_collect_boost': 1.5,
+    
     'initial_collect_boost_away_from_base': 2.0,
     'start_hunting_season_relative_step': 0.1875,
     'end_hunting_season_relative_step': 0.75,
     'early_hunting_season_less_collect_relative_step': 0.375,
-    
     'max_standard_ships_early_hunting_season': 5,
+    
     'late_hunting_season_more_collect_relative_step': 0.5,
-    'late_hunting_season_collect_max_n_step_risk': 0.4,
+    'late_hunting_season_collect_max_n_step_risk': 0.3,
+    'after_hunting_season_collect_max_n_step_risk': 0.4,
     'late_hunting_season_standard_min_fraction': 0.7,
     'max_standard_ships_late_hunting_season': 15,
     

@@ -8,8 +8,8 @@ import time
 import utils
 
 my_submissions = [17114281, 17114329, 17168045, 17170621, 17170654, 17170690,
-                  17171012]
-target_episode = 3238063 # Automatically matches the relevant submission
+                  17171012, 17183645, 17187266]
+target_episode = 3258863 # Automatically matches the relevant submission
 
 initial_config = {
     'halite_config_setting_divisor': 1.0,
@@ -56,12 +56,6 @@ initial_config = {
     
     'max_final_ships': 60,
     'initial_standard_ships_hunting_season': 10,
-    'minimum_standard_ships_hunting_season': 5,
-    'min_standard_ships_fraction_hunting_season': 0.2,
-    'max_standard_ships_fraction_hunting_season': 0.6,
-    
-    'max_standard_ships_low_clip_fraction_hunting_season': 0.4,
-    'max_standard_ships_high_clip_fraction_hunting_season': 0.8,
     'max_standard_ships_decided_end_pack_hunting': 2,
     'nearby_ship_halite_spawn_constant': 3.0,
     'nearby_halite_spawn_constant': 5.0,
@@ -104,23 +98,27 @@ initial_config = {
     
     'max_standard_ships_early_hunting_season': 5,
     'late_hunting_season_more_collect_relative_step': 0.5,
+    'late_hunting_season_collect_max_n_step_risk': 0.3,
+    'after_hunting_season_collect_max_n_step_risk': 0.4,
     'late_hunting_season_standard_min_fraction': 0.7,
+    
     'max_standard_ships_late_hunting_season': 15,
     'collect_on_safe_return_relative_step': 0.075,
-    
     'min_halite_to_stop_early_hunt': 15000.0,
     'early_best_opponent_relative_step': 0.5,
     'surrounding_ships_cycle_extrapolate_step_count': 5,
+    
     'surrounding_ships_extended_cycle_extrapolate_step_count': 7,
-    'initial_collect_override_relative_step': 0.125,
     }
 
 this_folder = os.path.dirname(__file__)
-replay_folder = os.path.join(this_folder, '../Rule agents/Leaderboard replays/')
+replay_folder = os.path.join(
+  this_folder, '../Rule agents/Leaderboard replays/')
 episode_found = False
 for my_submission in my_submissions:
   data_folder = os.path.join(replay_folder, str(my_submission))
-  json_files = np.sort([f for f in os.listdir(data_folder) if f[-4:] == "json"])
+  json_files = np.sort(
+    [f for f in os.listdir(data_folder) if f[-4:] == "json"])
   episode_match = [str(target_episode) in f for f in json_files]
   if np.any(np.array(episode_match)):
     json_file = [f for (f, m) in zip(json_files, episode_match) if m][0]
@@ -130,7 +128,7 @@ for my_submission in my_submissions:
     break
 
 if not episode_found:
-  raise ValueError("First load the relevant data with scrape_json.py")
+  raise ValueError("Load data with scrape_json.py and add to 'my_submissions'")
 
 with open(json_path) as f:
   raw_data = json.load(f)
