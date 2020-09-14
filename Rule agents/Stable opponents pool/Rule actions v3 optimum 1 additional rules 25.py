@@ -1864,8 +1864,8 @@ def scale_attack_scores_bases_ships(
     num_attacked_bases = 1 # 1 is plenty of aggression for the world
     for attack_id in range(num_attacked_bases):
       if attack_id == 0 and targeted_base_override is not None:
-        print("Targeted base override", observation['step'],
-              targeted_base_override)
+        #print("Targeted base override", observation['step'],
+        #      targeted_base_override)
         base_row, base_col = targeted_base_override
       else:
         base_id = ordered_base_ids[attack_id]
@@ -5192,8 +5192,8 @@ def consider_adding_strategic_bases(
     new_base_desirability[bad_positions] = new_base_desirability[
       ~bad_positions].min()
   else:
-    print(observation['step'],
-          "Not constructing a new base since there are no valid locations")
+    #print(observation['step'],
+    #      "Not constructing a new base since there are no valid locations")
     new_base_desirability *= 0
          
   # if observation['step'] == 211:

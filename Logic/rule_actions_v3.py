@@ -922,8 +922,19 @@ def update_scores_opponent_ships(
             n_step_bad_directions_die_probs[d] = min_die_prob
             
             # Correction to act with more risk towards the end of the game
-            if min_die_prob > (n_step_avoid_min_die_prob_cutoff + 0.01*max(
-                  0, 50-steps_remaining)):
+            die_prob_cutoff = (n_step_avoid_min_die_prob_cutoff + 0.01*max(
+                  0, 50-steps_remaining))
+            if d is None:
+              if observation['relative_step'] > config[
+                'end_hunting_season_relative_step']:
+                die_prob_cutoff = max(die_prob_cutoff, config[
+                  'after_hunting_season_collect_max_n_step_risk'])
+              elif observation['relative_step'] > config[
+                'late_hunting_season_more_collect_relative_step']:
+                die_prob_cutoff = max(die_prob_cutoff, config[
+                  'late_hunting_season_collect_max_n_step_risk'])
+            # print(observation['step'], die_prob_cutoff)
+            if min_die_prob > die_prob_cutoff:
               n_step_bad_directions.append(d)
               
   # if observation['step'] == 215 and ship_k == '2-2':
@@ -1756,8 +1767,8 @@ def scale_attack_scores_bases_ships(
     num_attacked_bases = 1 # 1 is plenty of aggression for the world
     for attack_id in range(num_attacked_bases):
       if attack_id == 0 and targeted_base_override is not None:
-        print("Targeted base override", observation['step'],
-              targeted_base_override)
+        # print("Targeted base override", observation['step'],
+        #       targeted_base_override)
         base_row, base_col = targeted_base_override
       else:
         base_id = ordered_base_ids[attack_id]
@@ -5084,8 +5095,8 @@ def consider_adding_strategic_bases(
     new_base_desirability[bad_positions] = new_base_desirability[
       ~bad_positions].min()
   else:
-    print(observation['step'],
-          "Not constructing a new base since there are no valid locations")
+    # print(observation['step'],
+    #       "Not constructing a new base since there are no valid locations")
     new_base_desirability *= 0
          
   # if observation['step'] == 211:
@@ -7772,7 +7783,7 @@ def get_ship_plans(
     recompute_ship_plan_order_duration += time.time() - reorder_start_time
     
   # Override of the ship plan: if I have a ship that is returning to a base
-  # after the first 30 steps, and it can safely collect on an interesting
+  # after the first N steps, and it can safely collect on an interesting
   # halite square: collect rather than return. 
   if observation['relative_step'] > config[
       'collect_on_safe_return_relative_step']:
