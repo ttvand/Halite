@@ -5558,7 +5558,7 @@ def protect_base(observation, env_config, all_ship_scores, player_obs,
         
     base_protected = worst_case_opponent_distances[0] > 0
     
-    # if observation['step'] == 227:
+    # if observation['step'] == 186:
     #   import pdb; pdb.set_trace()
     
     if np.any(opponent_can_attack_sorted):
@@ -5649,8 +5649,13 @@ def protect_base(observation, env_config, all_ship_scores, player_obs,
             else:
               # Set the base as the target and override the base return
               # synchronization
+              towards_base_mask = get_mask_between_exclude_ends(
+                row, col, base_row, base_col, grid_size)
+              ship_scores[0][towards_base_mask] += 9e5*(
+                  1+max_considered_attackers-i)
               ship_scores[1][base_row, base_col] += 1e6*(
                   1+max_considered_attackers-i)
+              
               ignore_base_collision_ship_keys.append(ship_k)
               
               # Defend the base without fear if I have no halite on board

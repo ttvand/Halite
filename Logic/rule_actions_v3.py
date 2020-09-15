@@ -5454,7 +5454,7 @@ def protect_base(observation, env_config, all_ship_scores, player_obs,
         
     base_protected = worst_case_opponent_distances[0] > 0
     
-    # if observation['step'] == 227:
+    # if observation['step'] == 186:
     #   import pdb; pdb.set_trace()
     
     if np.any(opponent_can_attack_sorted):
@@ -5545,8 +5545,13 @@ def protect_base(observation, env_config, all_ship_scores, player_obs,
             else:
               # Set the base as the target and override the base return
               # synchronization
+              towards_base_mask = get_mask_between_exclude_ends(
+                row, col, base_row, base_col, grid_size)
+              ship_scores[0][towards_base_mask] += 9e5*(
+                  1+max_considered_attackers-i)
               ship_scores[1][base_row, base_col] += 1e6*(
                   1+max_considered_attackers-i)
+              
               ignore_base_collision_ship_keys.append(ship_k)
               
               # Defend the base without fear if I have no halite on board
@@ -9437,11 +9442,14 @@ def update_zero_halite_ship_behavior(
                       if other_ship_k not in all_ship_keys:
                         distance = DISTANCES[prev_row, prev_col][
                           row_d2, col_d2]
+                        threat_distance = DISTANCES[row_d2, col_d2][
+                          row_d1, col_d1]
                         # Use the distance of the opponent ship to the base
                         # rather than the collision distance since it is
                         # ambiguous where the ships collided
                         potential_ship_collisions.append((
-                          distance, 0, nearest_prev_base_distance,
+                          distance, threat_distance,
+                          nearest_prev_base_distance,
                           friendly_prev_nearest_base, observation['step'],
                           my_ship_position, row_d2, col_d2))
                     
@@ -11273,7 +11281,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'get_actions_duration': get_actions_duration,
     }
   
-  # if observation['step'] == 288:
-  #   import pdb; pdb.set_trace()
+  if observation['step'] == 96:
+    import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details

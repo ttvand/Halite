@@ -9,8 +9,8 @@ import utils
 
 my_submissions = [17114281, 17114329, 17168045, 17170621, 17170654,
                   17170690, 17171012, 17183645, 17187266,
-                  17190682, 17190822, 17190934]
-target_episode = 3263046 # Automatically matches the relevant submission
+                  17190682, 17190822, 17190934, 17195646]
+target_episode = 3279869 # Automatically matches the relevant submission
 
 initial_config = {
     'halite_config_setting_divisor': 1.0,
@@ -26,37 +26,37 @@ initial_config = {
     'establish_base_smoothed_multiplier': 0.0,
     
     'establish_first_base_smoothed_multiplier_correction': 2.0,
+    'establish_base_dm_exponent': 1.1,
     'first_base_no_4_way_camping_spot_bonus': 300*0,
     'start_camp_if_not_winning': 0,
     'max_camper_ship_budget': 2*1,
-    'relative_step_start_camping': 0.15,
     
+    'relative_step_start_camping': 0.15,
     'establish_base_deposit_multiplier': 1.0,
     'establish_base_less_halite_ships_multiplier_base': 1.0,
     'max_attackers_per_base': 3*1,
     'attack_base_multiplier': 300.0,
-    'attack_base_less_halite_ships_multiplier_base': 0.9,
     
+    'attack_base_less_halite_ships_multiplier_base': 0.9,
     'attack_base_halite_sum_multiplier': 2.0,
     'attack_base_run_opponent_multiplier': 1.0,
     'attack_base_catch_opponent_multiplier': 1.0,
     'collect_run_opponent_multiplier': 10.0,
-    'return_base_run_opponent_multiplier': 2.5,
     
+    'return_base_run_opponent_multiplier': 2.5,
     'establish_base_run_opponent_multiplier': 2.5,
     'collect_catch_opponent_multiplier': 1.0,
     'return_base_catch_opponent_multiplier': 1.0,
     'establish_base_catch_opponent_multiplier': 0.5,
-    'two_step_avoid_boxed_opponent_multiplier_base': 0.7,
     
+    'two_step_avoid_boxed_opponent_multiplier_base': 0.7,
     'n_step_avoid_boxed_opponent_multiplier_base': 0.45,
     'min_consecutive_chase_extrapolate': 6,
     'chase_return_base_exponential_bonus': 2.0,
     'ignore_catch_prob': 0.3,
-    'max_initial_ships': 60,
     
+    'max_initial_ships': 60,
     'max_final_ships': 60,
-    'initial_standard_ships_hunting_season': 10,
     'max_standard_ships_decided_end_pack_hunting': 2,
     'nearby_ship_halite_spawn_constant': 3.0,
     'nearby_halite_spawn_constant': 5.0,
