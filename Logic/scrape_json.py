@@ -7,7 +7,8 @@ from pathlib import Path
 import time
 
 my_submissions = [17114281, 17114329, 17168045, 17170621, 17170654,
-                  17170690, 17171012, 17183645, 17187266]
+                  17170690, 17171012, 17183645, 17187266,
+                  17190682, 17190822, 17190934]
 
 # Returns metadata for all episodes for a particular submission
 # You can find your submission id at the top of the list of episodes for your

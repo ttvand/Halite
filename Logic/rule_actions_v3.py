@@ -3705,7 +3705,6 @@ def update_scores_pack_hunt(
           
     # Try to cut off the preferred escape direction for opponent ships that
     # only have a stand still valid action
-    # TODO: make this work
     for j in range(num_potential_targets):
       target_row = potential_targets_pos[0][j]
       target_col = potential_targets_pos[1][j]
@@ -3754,9 +3753,14 @@ def update_scores_pack_hunt(
             covered_row, covered_col = move_ship_row_col(
                 target_row, target_col, d, grid_size)
             considered_attacker_ids = can_cover_dirs[d]
-            if considered_attacker_ids:
+            # if considered_attacker_ids and override_move_squares_taken[
+            #     covered_row, covered_col]:
+            #   import pdb; pdb.set_trace()
+            
+            if considered_attacker_ids and not override_move_squares_taken[
+                covered_row, covered_col]:
               # Prefer my attackers that can not attack other escape squares
-              # (on the corner so diff row or col)
+              # (on the same row or col at a distance of 2)
               num_considered_attackers = len(considered_attacker_ids)
               considered_attack_scores = np.zeros(num_considered_attackers)
               for cons_attack_id in range(num_considered_attackers):
@@ -3774,6 +3778,7 @@ def update_scores_pack_hunt(
               ship_k = my_ship_pos_to_k[attacker_row*grid_size+attacker_col]
               # import pdb; pdb.set_trace()
               all_ship_scores[ship_k][0][covered_row, covered_col] = 2e5
+              override_move_squares_taken[covered_row, covered_col] = 1
               for d_ in NOT_NONE_DIRECTIONS:
                 if selected_attacker_id in can_cover_dirs[d_]:
                   can_cover_dirs[d_].remove(selected_attacker_id)
@@ -4593,7 +4598,7 @@ def get_ship_scores(config, observation, player_obs, env_config, np_rng,
     first_base_or_can_spawn = my_ship_count == 1 and num_my_bases == 0 and (
       observation['step'] <= 10 or (player_obs[0]+ship_halite) >= (
         2*spawn_cost))
-    establish_base_scores = dm*(
+    establish_base_scores = dm**(config['establish_base_dm_exponent'])*(
       smoothed_halite-obs_halite) * (config[
         'establish_base_smoothed_multiplier'] + first_base*config[
           'establish_first_base_smoothed_multiplier_correction'])*(
@@ -5729,7 +5734,7 @@ def update_scores_rescue_missions(
     #   return_base_row = main_base_row
     #   return_base_col = main_base_col
       
-    # if observation['step'] == 220:
+    # if observation['step'] == 288:
     #   import pdb; pdb.set_trace()
       
     return_base_directions = get_dir_from_target(
@@ -6779,6 +6784,7 @@ def update_scores_victory_formation(
   halite_ships = np.stack([
     rbs[3] for rbs in observation['rewards_bases_ships']]).sum(0)
   halite_ships[stacked_ships.sum(0) == 0] = -1e-9
+  my_bases = observation['rewards_bases_ships'][0][1]
   grid_size = halite_ships.shape[0]
   ship_counts = stacked_ships.sum((1, 2))
   all_ship_count = ship_counts.sum()
@@ -6789,61 +6795,81 @@ def update_scores_victory_formation(
   current_scores = scores+halite_cargos+ship_value*ship_counts
   min_advantage = current_scores[0] - current_scores[1:].max()
   
-  # First compute if we can afford a victory dance
-  min_required_for_dance = (steps_remaining+10)*env_config.spawnCost
+  # Obtain the TOM pattern location 
+  top_row = 8
+  left_col = 1
+  target_pattern = np.zeros((grid_size, grid_size), dtype=np.bool)
+  # T of TOM
+  target_pattern[top_row, left_col:(left_col+5)] = 1
+  target_pattern[top_row:(top_row+4), left_col+2] = 1
+  # O of TOM
+  target_pattern[top_row, (left_col+7):(left_col+9)] = 1
+  target_pattern[top_row+3, (left_col+7):(left_col+9)] = 1
+  target_pattern[(top_row+1):(top_row+3), left_col+6] = 1
+  target_pattern[(top_row+1):(top_row+3), left_col+9] = 1
+  # M of TOM
+  target_pattern[top_row+3, left_col+11] = 1
+  target_pattern[top_row+2, left_col+12] = 1
+  target_pattern[top_row+1, left_col+13] = 1
+  target_pattern[top_row+2, left_col+14] = 1
+  target_pattern[top_row+1, left_col+15] = 1
+  target_pattern[top_row+2, left_col+16] = 1
+  target_pattern[top_row+3, left_col+17] = 1
   
-  # Obtain the V pattern location 
-  num_zero_halite = 21 #((halite_ships == 0) & stacked_ships[0]).sum()
-  my_zero_halite_ship_density = smooth2d(np.logical_and(
-    stacked_ships[0], halite_ships == 0), smooth_kernel_dim=5)
-  v_pattern = np.zeros((grid_size, grid_size))
-  start_row = int(min(grid_size-1, (grid_size+num_zero_halite/2)//2))
-  end_row = int(max(start_row-grid_size//2, start_row-num_zero_halite//2))
-  col_offset = 0
-  for row in range(start_row, end_row-1, -1):
-    v_pattern[row, grid_size//2 - col_offset] = 1
-    v_pattern[row, grid_size//2 + col_offset] = 1
-    if col_offset < grid_size//2:
-      v_pattern[row, grid_size//2 - col_offset - 1] = -1
-      v_pattern[row, grid_size//2 - col_offset + 1] = 1
-      v_pattern[row, grid_size//2 + col_offset - 1] = -1
-      v_pattern[row, grid_size//2 + col_offset + 1] = -1
-    col_offset += 1
-  if min_advantage > min_required_for_dance:
-    for ship_k in all_ship_scores:
-      row, col = row_col_from_square_grid_pos(
-        player_obs[2][ship_k][0], grid_size)
-      ship_halite = halite_ships[row, col]
+  # First compute if we can afford a victory formation
+  uncovered_pattern = target_pattern & ~(my_bases)
+  num_uncovered_squares = uncovered_pattern.sum()
+  min_required_for_formation = (
+    steps_remaining*0.2+10+num_uncovered_squares)*(
+      env_config.spawnCost + ship_value)
+  player_ship_counts = stacked_ships.sum((1, 2))
+  ship_advantage = player_ship_counts[0] - player_ship_counts[1:].max()
+  
+  available_ships_formation = np.copy(stacked_ships[0])
+  can_form_victory_formation = min_advantage > min_required_for_formation and (
+    steps_remaining < 20) and (ship_advantage > num_uncovered_squares) and (
+      num_uncovered_squares > 0)
+  if can_form_victory_formation:
+    my_ship_pos_to_k = {v[0]: k for k, v in player_obs[2].items()}
+    uncovered_positions = np.where(uncovered_pattern)
+    for uncovered_id in range(num_uncovered_squares):
+      pattern_row = uncovered_positions[0][uncovered_id]
+      pattern_col = uncovered_positions[1][uncovered_id]
+      my_pattern_distances = DISTANCES[pattern_row, pattern_col] + 100*(
+        ~available_ships_formation)
+      best_target_match = np.where(
+        my_pattern_distances == my_pattern_distances.min())
+      ship_row = best_target_match[0][0]
+      ship_col = best_target_match[1][0]
+      ship_k = my_ship_pos_to_k[ship_row*grid_size+ship_col]
+      # import pdb; pdb.set_trace()
+      all_ship_scores[ship_k][0][pattern_row, pattern_col] += 1e12
+      all_ship_scores[ship_k][2][pattern_row, pattern_col] = 1e13
+      available_ships_formation[ship_row, ship_col] = 0
+      
+    # for ship_k in all_ship_scores:
+    #   row, col = row_col_from_square_grid_pos(
+    #     player_obs[2][ship_k][0], grid_size)
+    #   ship_halite = halite_ships[row, col]
         
-      if ship_halite > 0:
-        # Send all non zero halite ships to a base if there is time to get in
-        # formation - otherwise don't return to a base!
-        for j in [0, 2, 3]:
-          all_ship_scores[ship_k][j][:] = -1e6
-          
-        if steps_remaining > 15:
-          all_ship_scores[ship_k][1][:] *= 4
-        else:
-          all_ship_scores[ship_k][1][:] = -2e6
-      else:
-        # Aim for the largest possible V symbol with the remaining zero halite
-        # ships
-        for j in [0, 1, 2, 3]:
-          all_ship_scores[ship_k][j][:] = -1e6
-        dance_scores = 1e12*(v_pattern*(
-          DISTANCE_MASKS[(row, col)] ** (1/np.sqrt(steps_remaining+1)))*(
-            1.08**main_base_distances) - 0.2*(
-            my_zero_halite_ship_density))
-        if obs_halite[row, col] > 0:
-          dance_scores[row, col] = -1e6
-        best_dance_score = dance_scores.max()
-        best_squares = np.where(dance_scores == best_dance_score)
-        best_row = best_squares[0][0]
-        best_col = best_squares[1][0]
-        v_pattern[best_row, best_col] = 0
-        all_ship_scores[ship_k][0][best_row, best_col] = best_dance_score
+    #   # Greedily assign ships to convert at each of the uncovered positions in
+    #   # the target pattern
+    #   for j in [0, 1, 2, 3]:
+    #     all_ship_scores[ship_k][j][:] = -1e6
+    #   dance_scores = 1e12*(v_pattern*(
+    #     DISTANCE_MASKS[(row, col)] ** (1/np.sqrt(steps_remaining+1)))*(
+    #       1.08**main_base_distances) - 0.2*(
+    #       my_zero_halite_ship_density))
+    #   if obs_halite[row, col] > 0:
+    #     dance_scores[row, col] = -1e6
+    #   best_dance_score = dance_scores.max()
+    #   best_squares = np.where(dance_scores == best_dance_score)
+    #   best_row = best_squares[0][0]
+    #   best_col = best_squares[1][0]
+    #   v_pattern[best_row, best_col] = 0
+    #   all_ship_scores[ship_k][0][best_row, best_col] = best_dance_score
               
-  return all_ship_scores
+  return all_ship_scores, can_form_victory_formation
 
 def get_ship_plans(
     config, observation, player_obs, env_config, verbose, all_ship_scores,
@@ -7225,13 +7251,15 @@ def get_ship_plans(
   # if observation['step'] == 188:
   #   import pdb; pdb.set_trace()
        
-  # Go into a base formation when I have won
+  # Go into a victory formation when I have won
   # This can be perceived as arrogant (because it is)
-  # if observation['relative_step'] >= 0.85:
-  #   all_ship_scores = update_scores_victory_formation(
-  #     all_ship_scores, config, env_config, stacked_ships, observation,
-  #     halite_ships, steps_remaining, obs_halite, player_obs,
-  #     main_base_distances)
+  if observation['relative_step'] >= 0.85:
+    all_ship_scores, victory_formation = update_scores_victory_formation(
+      all_ship_scores, config, env_config, stacked_ships, observation,
+      halite_ships, steps_remaining, obs_halite, player_obs,
+      main_base_distances)
+  else:
+    victory_formation = False
        
   # Lower the collect scores for non high priority ships for the squares where
   # a high priority ships has claimed the move position.
@@ -7297,7 +7325,7 @@ def get_ship_plans(
             my_defended_abandoned_bases) | can_return_safely)).max(),
           ship_scores[3].max(),
           ]) and (not almost_boxed_in)) or convert_surrounded_ship or (
-            ship_scores[13]):
+            ship_scores[13]) or victory_formation:
       # Obtain the row and column of the new target base
       target_base = np.where(ship_scores[2] == ship_scores[2].max())
       target_row = target_base[0][0]
@@ -7913,7 +7941,8 @@ def get_ship_plans(
           recompute_ship_plan_order_duration, on_rescue_mission,
           ships_on_box_mission, requested_save_conversion_budget,
           non_abandoned_base_pos, this_step_base_defense_keys,
-          should_spawn_base_next_step, ship_plans_reordered)
+          should_spawn_base_next_step, ship_plans_reordered,
+          victory_formation)
 
 def get_dir_from_target(row, col, target_row, target_col, grid_size):
   if row == target_row and col == target_col:
@@ -8677,7 +8706,6 @@ def map_ship_plans_to_actions(
                 else:
                   # This is an opponent base - add an attack base bonus if
                   # it can not be defended
-                  # TODO: remove all asserts in submission
                   attack_base_bonus = 0
                   print("BOXED IN NEXT TO AN OPPONENT BASE!")
                   assert opponent_bases[move_row, move_col]
@@ -8836,7 +8864,8 @@ def map_ship_plans_to_actions(
 def decide_existing_base_spawns(
     config, observation, player_obs, my_next_bases, my_next_ships, obs_halite,
     env_config, remaining_budget, verbose, ship_plans, updated_ship_pos,
-    weighted_base_mask, history, requested_save_conversion_budget):
+    weighted_base_mask, history, requested_save_conversion_budget,
+    victory_formation):
 
   spawn_cost = env_config.spawnCost
   convert_cost = env_config.convertCost
@@ -8857,6 +8886,7 @@ def decide_existing_base_spawns(
   relative_step = observation['relative_step']
   max_allowed_ships = config['max_initial_ships'] - relative_step*(
     config['max_initial_ships'] - config['max_final_ships'])
+  # print(observation['step'], max_allowed_ships, my_ship_count)
   if history['limit_ships_timeout']:
     # In order to avoid weird timeouts
     max_allowed_ships -= 15
@@ -8864,7 +8894,7 @@ def decide_existing_base_spawns(
     rbs[2] for rbs in observation['rewards_bases_ships']]).sum()
   max_spawns = min(max_spawns, int(max_allowed_ships - my_ship_count))
   
-  # if observation['step'] == 304:
+  # if observation['step'] == 60:
   #   import pdb; pdb.set_trace()
   
   # Restrict the number of spawns if there is little halite remaining on the
@@ -8878,17 +8908,19 @@ def decide_existing_base_spawns(
     current_halite_sum[1:].max()))/spawn_cost
   massively_ahead_in_halite = halite_sum_spawn_advantage > 8
   game_almost_over = observation['relative_step'] >= 0.8
+  steps_remaining = env_config.episodeSteps-1-observation['step']
   if not_winning or (game_almost_over and not massively_ahead_in_halite):
     max_spawns = min(max_spawns, int(
       min(3000, (obs_halite.sum())**0.8)/min(
         total_ship_count+1e-9, (my_ship_count+1e-9)*2)/spawn_cost*(
         1-relative_step)*(env_config.episodeSteps-2)/config[
           'max_spawn_relative_step_divisor']))
-  elif game_almost_over and massively_ahead_in_halite:
+  elif game_almost_over and massively_ahead_in_halite and (
+      steps_remaining >= 20 or not victory_formation):
     max_spawns = min(max_spawns, int(halite_sum_spawn_advantage-8))
   last_episode_turn = observation['relative_step'] == 1
 
-  # if observation['step'] == 112:
+  # if observation['step'] == 176:
   #   import pdb; pdb.set_trace()
 
   if max_spawns <= 0 or not player_obs[1] or last_episode_turn:
@@ -10524,8 +10556,7 @@ def update_base_camping_strategy(
               # Take more risky actions when I have > 1 campers
               risk_threshold = camping_risk_phase_2_7_multiplier*(
                 num_this_base_campers-1) if (camping_phase in [2, 7]) else 0.1
-              consider_ship_other_tactics = camping_phase in [6, 7] and (
-                not my_ship_at_opposite_edge)
+              consider_ship_other_tactics = not my_ship_at_opposite_edge
               camping_ships_strategy[ship_k] = (
                 risk_threshold, collect_override_addition, zeros_grid_mask,
                 consider_ship_other_tactics, consider_ship_other_tactics,
@@ -11178,7 +11209,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
    on_rescue_mission, ships_on_box_mission,
    requested_save_conversion_budget, non_abandoned_base_pos,
    this_step_base_defense_keys, should_spawn_base_next_step,
-   ship_plans_reordered) = get_ship_plans(
+   ship_plans_reordered, victory_formation) = get_ship_plans(
     config, observation, player_obs, env_config, verbose,
     copy.deepcopy(all_ship_scores), np_rng, weighted_base_mask,
     steps_remaining, opponent_ships_sensible_actions, opponent_ships_scaled,
@@ -11206,7 +11237,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     config, observation, player_obs, my_next_bases, my_next_ships,
     my_next_halite, env_config, remaining_budget, verbose, ship_plans,
     updated_ship_pos, weighted_base_mask, history,
-    requested_save_conversion_budget)
+    requested_save_conversion_budget, victory_formation)
   
   # Add data to my history so I can update it appropriately at the beginning of
   # the next step.
@@ -11242,7 +11273,7 @@ def get_config_actions(config, observation, player_obs, env_observation,
     'get_actions_duration': get_actions_duration,
     }
   
-  # if observation['step'] == 32:
+  # if observation['step'] == 288:
   #   import pdb; pdb.set_trace()
   
   return mapped_actions, history, halite_spent, step_details
