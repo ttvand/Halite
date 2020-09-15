@@ -10,7 +10,7 @@ import utils
 my_submissions = [17114281, 17114329, 17168045, 17170621, 17170654,
                   17170690, 17171012, 17183645, 17187266,
                   17190682, 17190822, 17190934, 17195646]
-target_episode = 3279869 # Automatically matches the relevant submission
+target_episode = 3263046 # Automatically matches the relevant submission
 
 initial_config = {
     'halite_config_setting_divisor': 1.0,
