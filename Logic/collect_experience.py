@@ -65,7 +65,8 @@ def load_pool_models(pool_name, max_pool_size, agent_config,
                      best_iteration_opponents, record_videos_new_iteration):
   # List all files in the agent pool, create a random agent if there are none
   this_folder = os.path.dirname(__file__)
-  agents_folder = os.path.join(this_folder, '../Agents/' + pool_name)
+  agents_folder = os.path.join(
+    this_folder, '../Deep Learning Agents/' + pool_name)
   Path(agents_folder).mkdir(parents=True, exist_ok=True)
   agent_paths = [f for f in os.listdir(agents_folder) if f[-3:]=='.h5']
   if not agent_paths:
@@ -92,7 +93,8 @@ def load_pool_models(pool_name, max_pool_size, agent_config,
     this_agent = utils.load_models(agent_full_paths[:1])[0]
     agents = []
     for opponent_pool in best_iteration_opponents:
-      opponent_dir = os.path.join(this_folder, '../Agents/' + opponent_pool)
+      opponent_dir = os.path.join(
+        this_folder, '../Deep Learning Agents/' + opponent_pool)
       opponent_paths = [f for f in os.listdir(opponent_dir) if f[-3:]=='.h5']
       opponent_paths = utils.decreasing_sort_on_iteration_id(opponent_paths)
       opponent_full_path = os.path.join(opponent_dir, opponent_paths[0])

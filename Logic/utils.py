@@ -10,10 +10,9 @@ from pathlib import Path
 import pickle
 import random
 import tempfile
-# from tensorflow.keras import backend as K
-# from tensorflow.keras.models import load_model
-# import tensorflow as tf
-# import time
+from tensorflow.keras import backend as K
+from tensorflow.keras.models import load_model
+import tensorflow as tf
 import yaml
 
 
@@ -722,7 +721,8 @@ def update_learning_progress(experiment_name, data_vals):
   # Append a line to the learning progress line if the file exists. Otherwise:
   # create it
   this_folder = os.path.dirname(__file__)
-  agents_folder = os.path.join(this_folder, '../Agents/' + experiment_name)
+  agents_folder = os.path.join(
+    this_folder, '../Deep Learning Agents/' + experiment_name)
   progress_path = os.path.join(agents_folder, 'learning_progress.csv')
   
   if os.path.exists(progress_path):
@@ -805,7 +805,8 @@ def record_videos(agent_path, num_agents_per_game, num_mirror_dim,
 def store_config_on_first_run(config):
   pool_name = config['pool_name']
   this_folder = os.path.dirname(__file__)
-  agents_folder = os.path.join(this_folder, '../Agents/' + pool_name)
+  agents_folder = os.path.join(
+    this_folder, '../Deep Learning Agents/' + pool_name)
   Path(agents_folder).mkdir(parents=True, exist_ok=True)
   f = os.path.join(agents_folder, 'initial_config.yml')
   if not os.path.exists(f):
