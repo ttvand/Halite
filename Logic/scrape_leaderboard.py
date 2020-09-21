@@ -5,8 +5,23 @@ import requests
 
 
 team_name_ids = {
-  "Raine Force": 5423724,
   "Tom Van de Wiele": 4714287,
+  "Raine Force": 5423724,
+  "convexOptimization": 5234835,
+  "mzotkiew": 5118779,
+  "Uninstall LoL": 4710354,
+  
+  "(⊙﹏⊙)": 5271934,
+  "Leukocyte": 5178111,
+  "Robiland": 5133228,
+  "Fei Wang": 5119134,
+  "KhaVo Dan Gilles Robga Tung": 5122094,
+  
+  "Kawaii Disciples Of Mehul Motani Sensei": 4960137,
+  "ML - PaulTodo & GuillaumeHuard": 5376608,
+  "Starek": 5178872,
+  "Team VQ": 4820508,
+  "Rage": 5239573,
   }
 
 def getTeamEpisodes(team_id):
@@ -85,7 +100,8 @@ def get_submisison_progress(episodes, team_name, team_id):
   
 all_team_episodes = {}
 all_team_submission_progress = {}
-for team_name in team_name_ids:
+for team_index, team_name in enumerate(team_name_ids):
+  print(team_index)
   team_id = team_name_ids[team_name]
   all_team_episodes[team_name] = getTeamEpisodes(team_id)
   all_team_submission_progress[team_name] = get_submisison_progress(
