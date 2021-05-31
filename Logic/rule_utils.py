@@ -129,6 +129,7 @@ FIXED_POOL_AGENT_WEIGHTS = {
     'Rule actions v3 optimum 1 additional rules 29 - 2': 1,
     'Rule actions v3 optimum 1 additional rules 29 - 3': 1,
     'Rule actions v3 optimum 1 additional rules 29 - 4': 1,
+    'raine_force_best_agent': 1,
     'Base attacker': 0.1,
     'Runner': 0.1,
     # 'Greedy - many spawns and conversions': 1,
@@ -476,6 +477,7 @@ def get_config_or_callable_actions(
     kwargs = {
       'rng_action_seed': rng_action_seed,
       }
+    # import pdb; pdb.set_trace()
     return_vals = config_or_callable(
       env_observation, env_config, **kwargs)
     
@@ -620,7 +622,7 @@ def record_videos(agent_path, num_agents_per_game, rng_action_seeds,
         config_id_agents[0]] + ["random"]*(num_agents_per_game-1)
       
       env.run(agents)
-      game_recording = env.render(mode="html", width=800, height=600)
+      game_recording = env.render(mode="ipython", width=800, height=600)
       
     # Save the HTML recording in the videos folder
     folder, extension = tuple(agent_path.rsplit('/', 1))

@@ -32,7 +32,7 @@ config = {
   'early_episode_termination_steps': None,  # Exits environment after N steps
   
   'num_agents_per_game': 4,
-  'pool_name': 'Rule based with evolution IX',
+  'pool_name': 'Rule based with evolution X',
 
   # You need to delete the earlier configs or delete an entire agent pool after
   # making changes to the search ranges
